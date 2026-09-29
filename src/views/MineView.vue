@@ -126,13 +126,13 @@ function handleLogout() {
 .mine-header { margin: 8px 2px 14px; }
 .mine-role { margin: 0; }
 .profile-card { display: flex; align-items: center; gap: 14px; padding: 18px; }
-.profile-avatar { flex: 0 0 auto; display: grid; width: 56px; height: 56px; place-items: center; color: #ffffff; background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-radius: 18px; font-size: 26px; font-weight: 800; }
+.profile-avatar { flex: 0 0 auto; display: grid; width: 56px; height: 56px; place-items: center; color: #ffffff; background: var(--accent); border-radius: 14px; font-size: 26px; font-weight: 800; }
 .profile-info { flex: 1; min-width: 0; }
 .profile-name-row { display: flex; gap: 8px; align-items: center; }
 .profile-name { min-width: 0; margin: 0; overflow: hidden; color: var(--text); font-size: 20px; font-weight: 800; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .role-badge { flex: 0 0 auto; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .profile-mail { margin: 7px 0 0; overflow: hidden; color: var(--text-2); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.profile-id { margin: 6px 0 0; color: var(--accent-2); font-size: 11px; }
+.profile-id { margin: 6px 0 0; color: var(--text-3); font-size: 11px; }
 .account-card { padding: 16px; }
 .account-card .section-title { margin-bottom: 12px; }
 .account-table { background: var(--panel-soft); }

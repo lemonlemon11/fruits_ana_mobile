@@ -84,6 +84,7 @@ async function onSubmit() {
             <van-checkbox v-model="rememberMe" shape="square" icon-size="16px">
               记住登录状态
             </van-checkbox>
+            <button class="forgot-link" type="button" @click="router.push('/forgot-password')">忘记密码？</button>
           </div>
 
           <van-button
@@ -121,7 +122,8 @@ async function onSubmit() {
 .login-card :deep(.van-field__left-icon) { color: var(--accent); }
 .login-card :deep(.van-field__control) { color: var(--text); font-weight: 500; }
 .login-card :deep(.van-field__control::placeholder) { color: var(--text-3); }
-.remember-row { display: flex; justify-content: flex-end; padding: 12px 2px 0; color: var(--text-2); font-size: 13px; }
+.remember-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 2px 0; color: var(--text-2); font-size: 13px; }
+.forgot-link { padding: 0; color: var(--text-3); background: transparent; border: 0; font-size: 13px; }
 .remember-row :deep(.van-checkbox__icon--checked .van-icon) { color: var(--accent); background: var(--accent); border-color: var(--accent); }
 .form-error { display: flex; gap: 8px; align-items: center; margin: 8px 0 0; padding: 9px 12px; color: var(--danger); background: rgba(255, 97, 120, 0.1); border: 1px solid rgba(255, 97, 120, 0.28); border-radius: 12px; font-size: 12px; line-height: 1.45; }
 .login-button { width: 100%; height: 48px; margin-top: 16px; font-size: 16px; font-weight: 700; }

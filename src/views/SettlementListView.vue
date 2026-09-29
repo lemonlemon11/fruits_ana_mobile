@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchSettlements } from '../api/data'
-import { gradeColor, gradeLabel, money, number, price } from '../utils/format'
+import { compactMoney, gradeColor, gradeLabel, money, number, price } from '../utils/format'
 
 const router = useRouter()
 
@@ -16,10 +16,35 @@ const loading = ref(true)
 const error = ref('')
 const showSort = ref(false)
 
+// ── 分页：van-list 滚动加载，搜索/排序/品牌切换重置回第 1 页 ──
+const PAGE_SIZE = 30
+const page = ref(1)
+const pagination = ref(null)
+const dateRange = ref(null)
+const listLoading = ref(false)
+const finished = computed(() => {
+  if (!pagination.value) return true
+  return page.value >= (pagination.value.pages || 1)
+})
+
+const rangeText = computed(() => {
+  const range = dateRange.value
+  if (!range) return ''
+  const start = String(range.start_date ?? '').slice(5)
+  const end = String(range.end_date ?? '').slice(5)
+  if (!start && !end) return ''
+  const text = `数据 ${start} ~ ${end}`
+  return range.is_default ? `${text} · 默认最近一月` : text
+})
+
 const sortOptions = [
-  { label: '日期', value: 'arrival_date' },
-  { label: '金额', value: 'sales_amount' },
-  { label: '数量', value: 'total_quantity' },
+  { label: '到货日期', value: 'arrival_date' },
+  { label: '销售金额', value: 'sales_amount' },
+  { label: '销售数量', value: 'total_quantity' },
+  { label: 'A果数量', value: 'grade_a' },
+  { label: 'B果数量', value: 'grade_b' },
+  { label: '平均售价', value: 'average_price' },
+  { label: '确认时间', value: 'confirmed_at' },
 ]
 const activeSortLabel = computed(() => {
   const current = sortOptions.find((option) => option.value === sortBy.value)
@@ -37,9 +62,12 @@ async function loadSettlements() {
       sortBy: sortBy.value,
       sortOrder: sortOrder.value,
       page: 1,
-      pageSize: 30,
+      pageSize: PAGE_SIZE,
     })
     settlements.value = result.settlements ?? []
+    pagination.value = result.pagination
+    dateRange.value = result.dateRange
+    page.value = 1
     if (!brand.value && result.brandTotals?.length) {
       brandTotals.value = result.brandTotals
     }
@@ -47,6 +75,29 @@ async function loadSettlements() {
     error.value = err?.message || '结算单加载失败，请稍后重试'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadMore() {
+  // 首屏仍在加载或已到末页时不再翻页。
+  if (loading.value || finished.value) return
+  try {
+    const next = page.value + 1
+    const result = await fetchSettlements({
+      keyword: keyword.value.trim(),
+      brand: brand.value || undefined,
+      sortBy: sortBy.value,
+      sortOrder: sortOrder.value,
+      page: next,
+      pageSize: PAGE_SIZE,
+    })
+    settlements.value.push(...(result.settlements ?? []))
+    pagination.value = result.pagination
+    page.value = next
+  } catch {
+    // 翻页失败保持当前列表，滚动到底会再次触发重试。
+  } finally {
+    listLoading.value = false
   }
 }
 
@@ -91,8 +142,22 @@ function sortArrow(option) {
 
 const shortDate = (value) => String(value ?? '').slice(5, 10)
 
-function gradeEntries(item) {
-  return Object.entries(item.gradeQuantities ?? {}).filter(([, value]) => Number(value) > 0)
+function gradeSegments(item) {
+  const entries = Object.entries(item.gradeQuantities ?? {})
+    .filter(([, value]) => Number(value) > 0)
+    .sort((a, b) => Number(b[1]) - Number(a[1]))
+  const total = entries.reduce((sum, [, value]) => sum + Number(value), 0) || 1
+  const segments = entries.map(([grade, value]) => ({
+    grade,
+    share: Number(value) / total,
+  }))
+  return {
+    segments,
+    summary: entries
+      .slice(0, 2)
+      .map(([grade, value]) => `${gradeLabel(grade)} ${((Number(value) / total) * 100).toFixed(0)}%`)
+      .join(' · '),
+  }
 }
 
 function goDetail(item) {
@@ -106,11 +171,11 @@ loadSettlements()
   <div class="page settlement-page">
     <van-nav-bar title="结算单" fixed placeholder safe-area-inset-top />
 
-    <section class="app-card control-bar">
+    <section class="control-bar">
       <div class="control-top">
         <van-search
           v-model="keyword"
-          shape="round"
+          shape="square"
           background="transparent"
           placeholder="搜索订单号 / 商号 / 柜号 / 车牌"
           clearable
@@ -170,44 +235,52 @@ loadSettlements()
       </div>
     </van-popup>
 
-    <div v-if="loading" class="app-card state-card">
+    <p v-if="rangeText" class="range-hint mono">{{ rangeText }}</p>
+
+    <div v-if="loading" class="state-card">
       <van-loading color="var(--accent)" size="22">加载结算单中...</van-loading>
     </div>
 
-    <div v-else-if="error" class="app-card state-card">
+    <div v-else-if="error" class="state-card">
       <p class="muted">{{ error }}</p>
       <van-button type="primary" size="small" round @click="loadSettlements">重新加载</van-button>
     </div>
 
     <van-empty v-else-if="!settlements.length" image="search" description="暂无结算单" />
 
-    <div v-else class="settlement-list">
+    <van-list
+      v-else
+      v-model:loading="listLoading"
+      class="settlement-list"
+      :finished="finished"
+      finished-text="没有更多了"
+      loading-text="加载中..."
+      @load="loadMore"
+    >
       <article
         v-for="item in settlements"
         :key="item.merchantNo || item.orderNo"
-        class="app-card settlement-card"
+        class="settlement-item"
         @click="goDetail(item)"
       >
         <div class="card-top">
           <div class="brand-block">
-            <span class="brand-name">{{ item.brand || item.series || '未命名品牌' }}</span>
-            <span class="order-no mono">{{ item.orderNoNormalized || item.orderNo || '—' }}</span>
+            <span class="brand-name">
+              {{ item.brand || item.series || '未命名品牌' }}
+              <span v-if="item.fruitType && item.fruitType !== '榴莲'" class="fruit-tag">{{ item.fruitType }}</span>
+            </span>
+            <span class="order-no mono">{{ item.orderNoNormalized || item.orderNo || '—' }}<span v-if="item.recordCount" class="record-count"> · {{ item.recordCount }} 条</span></span>
           </div>
           <div class="amount-block">
-            <strong class="amount mono">{{ money(item.salesAmount) }}</strong>
-            <span class="amount-label">销售金额</span>
+            <strong class="amount mono">{{ compactMoney(item.salesAmount) }}</strong>
+            <span class="amount-label mono">{{ money(item.salesAmount) }}</span>
           </div>
         </div>
 
         <div class="card-period mono">
           <span>销售 {{ shortDate(item.saleDateStart) || '—' }} ~ {{ shortDate(item.saleDateEnd) || '—' }}</span>
           <span>到货 {{ shortDate(item.arrivalDate) || '—' }}</span>
-        </div>
-
-        <div class="card-logistics">
-          <span>商号 {{ item.merchantNoNormalized || item.merchantNo || '—' }}</span>
-          <span>柜号 {{ item.containerNo || '—' }}</span>
-          <span>车号 {{ item.vehicleNo || '—' }}</span>
+          <span v-if="item.confirmedAt">确认 {{ shortDate(item.confirmedAt) }}</span>
         </div>
 
         <div class="card-stats">
@@ -219,62 +292,60 @@ loadSettlements()
             <span class="stat-label">均价</span>
             <b class="mono">{{ price(item.averagePrice) }}</b>
           </div>
-          <div class="stat">
-            <span class="stat-label">记录</span>
-            <b class="mono">{{ item.recordCount || 0 }} 条</b>
+          <div class="stat logistics">
+            <span class="stat-label">柜 / 车</span>
+            <b class="mono">{{ item.containerNo || '—' }} / {{ item.vehicleNo || '—' }}</b>
           </div>
         </div>
 
-        <div v-if="gradeEntries(item).length" class="grade-row">
-          <span
-            v-for="[grade, quantity] in gradeEntries(item)"
-            :key="grade"
-            class="grade-chip"
-            :style="{ color: gradeColor(grade), borderColor: `${gradeColor(grade)}55`, background: `${gradeColor(grade)}12` }"
-          >
-            <i class="grade-dot" :style="{ background: gradeColor(grade) }"></i>
-            <span>{{ gradeLabel(grade) }}</span>
-            <b class="mono">{{ number(quantity) }}</b>
-          </span>
+        <div v-if="gradeSegments(item).segments.length" class="grade-block">
+          <div class="grade-bar">
+            <span
+              v-for="segment in gradeSegments(item).segments"
+              :key="segment.grade"
+              class="grade-segment"
+              :style="{ width: `${Math.min(100, Math.max(0, segment.share * 100))}%`, background: gradeColor(segment.grade) }"
+            ></span>
+          </div>
+          <span class="grade-summary">{{ gradeSegments(item).summary }}</span>
         </div>
       </article>
-    </div>
+    </van-list>
   </div>
 </template>
 
 <style scoped>
 .settlement-page { padding-top: 6px; }
 .control-bar {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding: 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
 }
 .control-top { display: flex; align-items: center; gap: 8px; }
 .control-top :deep(.van-search) { flex: 1; padding: 0; }
-.control-top :deep(.van-search__content) {
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(58, 104, 66, 0.16);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-}
+.control-top :deep(.van-search__content) { background: var(--panel-soft); border-radius: 8px; }
 .control-top :deep(.van-field__control) { color: var(--text); }
 .control-top :deep(.van-field__control::placeholder) { color: var(--text-3); }
 .sort-trigger {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 40px;
-  padding: 0 11px;
+  min-height: 36px;
+  padding: 0 10px;
   color: var(--text-2);
   background: var(--panel-soft);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 0;
+  border-radius: 8px;
   font-size: 12px;
   white-space: nowrap;
 }
 .sort-arrow { min-width: 12px; font-size: 12px; font-weight: 600; }
-.brand-filter { display: flex; gap: 7px; padding: 1px 2px 2px; overflow-x: auto; scrollbar-width: none; }
+.brand-filter {
+  display: flex;
+  gap: 7px;
+  padding: 0 0 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
 .brand-filter::-webkit-scrollbar { display: none; }
 .brand-chip {
   display: inline-flex;
@@ -284,15 +355,14 @@ loadSettlements()
   padding: 0 11px;
   color: var(--text-2);
   background: var(--panel-soft);
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  border: 0;
+  border-radius: 8px;
   font-size: 12px;
   white-space: nowrap;
 }
 .brand-chip.active {
   color: #ffffff;
   background: var(--accent);
-  border-color: var(--accent);
 }
 .brand-count { color: var(--text-3); font-size: 11px; }
 .brand-chip.active .brand-count { color: rgba(255, 255, 255, 0.85); }
@@ -307,83 +377,102 @@ loadSettlements()
   padding: 0 12px;
   color: var(--text-2);
   background: var(--panel-soft);
-  border: 1px solid transparent;
-  border-radius: 12px;
+  border: 0;
+  border-radius: 10px;
   font-size: 14px;
 }
-.sort-option.active { color: var(--accent); background: rgba(47, 143, 91, 0.06); border-color: rgba(47, 143, 91, 0.2); font-weight: 600; }
+.sort-option.active { color: var(--accent); background: rgba(22, 121, 79, 0.08); font-weight: 600; }
 .sort-footer { padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); }
 .sort-footer .van-button { margin: 0; }
-.settlement-list { display: flex; flex-direction: column; gap: 12px; }
-.settlement-card {
-  margin-bottom: 0;
-  padding: 14px;
+.settlement-list { display: flex; flex-direction: column; }
+.settlement-item {
+  padding: 14px 2px;
   cursor: pointer;
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  border-bottom: 1px solid var(--line);
 }
-.settlement-card:active { border-color: var(--line-strong); transform: scale(0.985); }
+.settlement-item:active { background: var(--panel-soft); }
 .card-top {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
 }
 .brand-block { display: flex; min-width: 0; flex-direction: column; }
-.brand-name { color: var(--text); font-size: 17px; font-weight: 800; line-height: 1.15; }
+.brand-name { color: var(--text); font-size: 15px; font-weight: 700; line-height: 1.2; }
 .order-no {
   overflow: hidden;
   margin-top: 3px;
-  color: var(--text-2);
+  color: var(--text-3);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.amount-block { flex: none; display: flex; flex-direction: column; align-items: flex-end; }
-.amount { color: var(--accent-2); font-size: 18px; font-weight: 800; line-height: 1.1; }
-.amount-label { margin-top: 3px; color: var(--text-3); font-size: 10px; }
+.record-count { color: var(--text-3); }
+.amount-block { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.amount { color: var(--text); font-size: 21px; font-weight: 800; line-height: 1.1; letter-spacing: -0.01em; }
+.amount-label { color: var(--text-3); font-size: 10px; }
 .card-period {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
-  margin-bottom: 8px;
-  color: var(--text-2);
+  margin: 8px 0 10px;
+  color: var(--text-3);
   font-size: 11px;
 }
-.card-logistics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  margin-bottom: 10px;
-  padding-bottom: 10px;
-  color: var(--text-2);
-  border-bottom: 1px solid var(--line);
-  font-size: 11px;
+.card-stats {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 8px;
 }
-.card-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .stat {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 4px;
 }
+.stat.logistics b { font-weight: 600; font-size: 12px; }
 .stat-label { color: var(--text-3); font-size: 11px; }
-.stat b { color: var(--text); font-size: 14px; font-weight: 700; line-height: 1.1; }
-.grade-row { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
-.grade-chip {
-  display: inline-flex;
+.stat b { color: var(--text); font-size: 14px; font-weight: 700; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grade-block {
+  display: flex;
   align-items: center;
-  gap: 5px;
-  min-height: 24px;
-  padding: 2px 8px;
-  border: 1px solid;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 600;
+  gap: 10px;
+  margin-top: 11px;
+}
+.grade-bar {
+  display: flex;
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #eef2ee;
+}
+.grade-segment { height: 100%; min-width: 3px; }
+.grade-summary {
+  flex: none;
+  color: var(--text-3);
+  font-size: 11px;
   white-space: nowrap;
 }
-.grade-chip b { margin-left: 2px; color: currentColor; font-size: 11px; font-weight: 600; }
-.grade-dot { width: 6px; height: 6px; margin-right: 0; }
-.grade-row { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
-.state-card { min-height: 170px; }
+.state-card {
+  display: flex;
+  min-height: 170px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: center;
+}
+.range-hint { margin: 8px 2px 0; color: var(--text-3); font-size: 10.5px; }
+.fruit-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
 </style>

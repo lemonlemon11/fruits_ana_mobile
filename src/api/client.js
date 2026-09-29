@@ -71,16 +71,62 @@ export const api = {
     }),
   me: () => request('/auth/me'),
   logout: () => request('/auth/logout', { method: 'POST' }),
+  forgotPasswordSendCode: (email) =>
+    request('/auth/forgot-password/send-code', {
+      method: 'POST',
+      body: { email },
+    }),
+  forgotPasswordVerifyCode: (payload = {}) =>
+    request('/auth/forgot-password/verify-code', {
+      method: 'POST',
+      body: {
+        email: payload.email,
+        verification_code: payload.code,
+      },
+    }),
+  forgotPasswordReset: (payload = {}) =>
+    request('/auth/forgot-password/reset', {
+      method: 'POST',
+      body: {
+        email: payload.email,
+        reset_token: payload.resetToken,
+        password: payload.password,
+      },
+    }),
+  notifications: (filters = {}) =>
+    request('/notifications', {
+      query: {
+        unread_only: filters.unreadOnly,
+        limit: filters.limit,
+      },
+    }),
+  notificationUnreadCount: () => request('/notifications/unread-count'),
+  readNotification: (id) => request(`/notifications/${id}/read`, { method: 'POST' }),
+  readAllNotifications: () => request('/notifications/read-all', { method: 'POST' }),
   overview: (filters = {}) =>
     request('/analytics/overview', {
       query: {
         start_date: filters.startDate,
         end_date: filters.endDate,
         merchant_no: filters.merchantNo,
+        brand: filters.brand,
+        country: filters.country,
+        market: filters.market,
       },
     }),
   trend: (filters = {}) =>
     request('/analytics/trend', {
+      query: {
+        start_date: filters.startDate,
+        end_date: filters.endDate,
+        merchant_no: filters.merchantNo,
+        brand: filters.brand,
+        country: filters.country,
+        market: filters.market,
+      },
+    }),
+  filterOptions: (filters = {}) =>
+    request('/analytics/filter-options', {
       query: {
         start_date: filters.startDate,
         end_date: filters.endDate,
@@ -93,6 +139,22 @@ export const api = {
         start_date: filters.startDate,
         end_date: filters.endDate,
         merchant_no: filters.merchantNo,
+        brand: filters.brand,
+        country: filters.country,
+        market: filters.market,
+        // 首页只用等级汇总与市场柜数，省略逐条明细（响应 150KB+ → ~2KB）。
+        include_records: filters.includeRecords === false ? false : undefined,
+      },
+    }),
+  gradeSpecBreakdown: (filters = {}) =>
+    request('/analytics/grade-spec-breakdown', {
+      query: {
+        start_date: filters.startDate,
+        end_date: filters.endDate,
+        merchant_no: filters.merchantNo,
+        brand: filters.brand,
+        country: filters.country,
+        market: filters.market,
       },
     }),
   settlementComparison: (filters = {}) =>
@@ -109,6 +171,15 @@ export const api = {
       query: {
         start_date: filters.startDate,
         end_date: filters.endDate,
+      },
+    }),
+  settlementAnalysis: (merchantNo, filters = {}) =>
+    request(`/analytics/settlements/${encodeURIComponent(merchantNo)}/analysis`, {
+      method: 'POST',
+      body: {
+        start_date: filters.startDate ?? null,
+        end_date: filters.endDate ?? null,
+        refresh: false,
       },
     }),
   settlements: (filters = {}) =>
@@ -135,6 +206,16 @@ export const api = {
     }),
   seriesAnalysis: (merchantNos, filters = {}) =>
     request('/analytics/series-comparison/analysis', {
+      method: 'POST',
+      body: {
+        merchant_no: merchantNos,
+        start_date: filters.startDate,
+        end_date: filters.endDate,
+        refresh: false,
+      },
+    }),
+  gradeDetailAnalysis: (merchantNos, filters = {}) =>
+    request('/analytics/grade-detail/analysis', {
       method: 'POST',
       body: {
         merchant_no: merchantNos,

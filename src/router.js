@@ -10,6 +10,12 @@ const routes = [
     meta: { guestOnly: true },
   },
   {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('./views/ForgotPasswordView.vue'),
+    meta: { title: '找回密码' },
+  },
+  {
     path: '/home',
     name: 'home',
     component: () => import('./views/HomeView.vue'),
@@ -38,6 +44,12 @@ const routes = [
     name: 'mine',
     component: () => import('./views/MineView.vue'),
     meta: { requiresAuth: true, tabbar: true, title: '我的' },
+  },
+  {
+    path: '/notifications',
+    name: 'notifications',
+    component: () => import('./views/NotificationsView.vue'),
+    meta: { requiresAuth: true, title: '消息通知' },
   },
   {
     path: '/:pathMatch(.*)*',

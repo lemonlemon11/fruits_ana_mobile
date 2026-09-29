@@ -31,8 +31,8 @@ onBeforeUnmount(() => window.removeEventListener('api:unauthorized', handleUnaut
         placeholder
         safe-area-inset-bottom
         :border="false"
-        active-color="#2f8f5b"
-        inactive-color="#8fa08c"
+        active-color="#16794f"
+        inactive-color="#9aa69e"
       >
         <van-tabbar-item replace to="/home" icon="chart-trending-o">总览</van-tabbar-item>
         <van-tabbar-item replace to="/settlements" icon="orders-o">结算</van-tabbar-item>

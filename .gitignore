@@ -10,3 +10,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# 工具与本地目录（不入库）
+logs/
+.mimosa/
+src/.mimosa/
+.zcode/
+backup_ui_report_style/

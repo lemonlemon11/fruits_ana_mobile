@@ -87,10 +87,12 @@ function normalizeRecord(row = {}) {
     id: row.id,
     saleDate: row.sale_date ?? row.saleDate ?? '',
     fruitType: row.fruit_type ?? row.fruitType ?? '榴莲',
+    variety: row.variety ?? '',
     grade: row.grade ?? row.grade_raw ?? row.gradeRaw ?? '',
     gradeRaw: row.grade_raw ?? row.gradeRaw ?? '',
     specRaw: row.spec_raw ?? row.specRaw ?? '',
     headCount: row.head_count ?? row.piece_count ?? row.headCount ?? '',
+    specKg: row.spec_kg ?? row.specKg ?? '',
     quantity: num(row.quantity),
     unitPrice: num(row.unit_price ?? row.unitPrice),
     amount: num(row.amount),
@@ -136,6 +138,12 @@ function normalizeSeriesSettlementItem(row = {}) {
   const item = normalizeSettlementItem(row)
   const grades = Array.isArray(row.grades) ? row.grades : []
   const gradeQuantities = {}
+  const rawAmountShares = row.grade_amount_shares ?? row.gradeAmountShares ?? {}
+  const gradeAmountShares = {}
+  for (const [grade, share] of Object.entries(rawAmountShares)) {
+    const value = nullableNum(share)
+    if (value !== null) gradeAmountShares[String(grade).toUpperCase()] = value
+  }
   const gradeRows = grades
     .map((gradeRow) => {
       const grade = String(gradeRow?.grade ?? '').toUpperCase()
@@ -155,10 +163,13 @@ function normalizeSeriesSettlementItem(row = {}) {
           nullableNum(gradeRow.weighted_avg_price ?? gradeRow.weightedAvgPrice)
           ?? (quantity ? amount / quantity : null),
         quantityShare: nullableNum(gradeRow.quantity_share ?? gradeRow.quantityShare),
+        amountShare: nullableNum(gradeRow.amount_share ?? gradeRow.amountShare)
+          ?? gradeAmountShares[grade]
+          ?? null,
       }
     })
     .filter(Boolean)
-  return { ...item, gradeQuantities, _gradeRows: gradeRows }
+  return { ...item, gradeQuantities, gradeAmountShares, _gradeRows: gradeRows }
 }
 
 function normalizeSettlementDetail(body, merchantNo) {
@@ -173,8 +184,13 @@ function normalizeSettlementDetail(body, merchantNo) {
     orderNoNormalized: body.order_no_normalized ?? body.orderNoNormalized ?? '',
     containerNo: body.container_no ?? body.containerNo ?? '',
     vehicleNo: body.vehicle_no ?? body.vehicleNo ?? '',
+    brand: body.brand ?? '',
+    country: body.country ?? '',
+    market: body.market ?? '',
+    sourceType: body.source_type ?? body.sourceType ?? '',
     fruitType: body.fruit_type ?? body.fruitType ?? '榴莲',
     arrivalDate: body.arrival_date ?? body.arrivalDate ?? '',
+    arrivalQuantity: nullableNum(body.arrival_quantity ?? body.arrivalQuantity),
     startDate: period.start_date ?? period.startDate ?? '',
     endDate: period.end_date ?? period.endDate ?? '',
     settlement: {
@@ -203,6 +219,7 @@ function normalizeSeriesComparison(body) {
       weightedAvgPrice: gradeRow.weightedAvgPrice,
       salesQuantity: gradeRow.salesQuantity,
       quantityShare: gradeRow.quantityShare,
+      amountShare: gradeRow.amountShare,
     })),
   )
   return {
@@ -247,14 +264,62 @@ export async function fetchTrend(filters = {}) {
   return Array.isArray(body.trend) ? body.trend : []
 }
 
+export async function fetchFilterOptions(filters = {}) {
+  const body = await api.filterOptions(filters)
+  const normalize = (rows, countKey) =>
+    (Array.isArray(rows) ? rows : [])
+      .filter((row) => row?.name)
+      .map((row) => ({ name: String(row.name), count: Number(row[countKey] ?? 0) }))
+  return {
+    brands: normalize(body.brands, 'settlement_count'),
+    countries: normalize(body.countries, 'settlement_count'),
+    markets: normalize(body.markets, 'settlement_count'),
+    years: Array.isArray(body.years) ? body.years.map(Number).filter(Number.isFinite) : [],
+    months: Array.isArray(body.months)
+      ? body.months.map(String).filter((month) => /^\d{4}-\d{2}$/.test(month))
+      : [],
+  }
+}
+
 export async function fetchGradeBreakdown(filters = {}) {
   const body = await api.gradeBreakdown(filters)
+  const marketBrandContainers = Array.isArray(body.market_brand_containers)
+    ? body.market_brand_containers
+    : []
   return {
     grades: normalizeGrades(body.grades ?? body.grade_summary),
     records: Array.isArray(body.records ?? body.sale_records)
       ? (body.records ?? body.sale_records).map(normalizeRecord)
       : [],
+    marketBrandContainers: marketBrandContainers.map((row) => ({
+      market: row.market ?? '未标注市场',
+      brand: row.brand ?? '',
+      containerCount: num(row.container_count ?? row.containerCount),
+    })),
   }
+}
+
+function normalizeSpecItem(row = {}) {
+  return {
+    pieceCount: row.piece_count ?? row.pieceCount ?? null,
+    specKg: row.spec_kg ?? row.specKg ?? null,
+    salesQuantity: num(row.sales_quantity ?? row.salesQuantity),
+    salesAmount: num(row.sales_amount ?? row.salesAmount),
+    weightedAvgPrice: nullableNum(row.weighted_avg_price ?? row.weightedAvgPrice),
+    quantityShare: nullableNum(row.quantity_share ?? row.quantityShare),
+  }
+}
+
+export async function fetchGradeSpecBreakdown(filters = {}) {
+  const body = await api.gradeSpecBreakdown(filters)
+  const grades = Array.isArray(body.grades) ? body.grades : []
+  return grades.map((row) => ({
+    grade: row.grade ?? '',
+    label: gradeLabel(row.grade ?? ''),
+    color: gradeColor(row.grade ?? ''),
+    total: normalizeMetrics(row.total ?? {}),
+    specs: (Array.isArray(row.specs) ? row.specs : []).map(normalizeSpecItem),
+  }))
 }
 
 export async function fetchSettlementOptions(filters = {}) {
@@ -262,11 +327,21 @@ export async function fetchSettlementOptions(filters = {}) {
   return Array.isArray(body.settlements) ? body.settlements.map(normalizeSettlementItem) : []
 }
 
+function normalizePagination(row) {
+  if (!row || typeof row !== 'object') return null
+  return {
+    total: num(row.total),
+    page: num(row.page),
+    pageSize: num(row.page_size ?? row.pageSize),
+    pages: num(row.pages),
+  }
+}
+
 export async function fetchSettlements(filters = {}) {
   const body = await api.settlements(filters)
   return {
     settlements: Array.isArray(body.settlements) ? body.settlements.map(normalizeSettlementItem) : [],
-    pagination: body.pagination ?? null,
+    pagination: normalizePagination(body.pagination),
     dateRange: body.date_range ?? body.dateRange ?? null,
     brandTotals: Array.isArray(body.brand_totals ?? body.brandTotals) ? body.brand_totals ?? body.brandTotals : [],
   }
@@ -284,4 +359,61 @@ export async function fetchSeriesComparison(merchantNos, filters = {}) {
 
 export async function fetchSeriesAnalysis(merchantNos, filters = {}) {
   return api.seriesAnalysis(merchantNos, filters)
+}
+
+export async function fetchSettlementAnalysis(merchantNo, filters = {}) {
+  return api.settlementAnalysis(merchantNo, filters)
+}
+
+export async function fetchGradeDetailAnalysis(merchantNos, filters = {}) {
+  return api.gradeDetailAnalysis(merchantNos, filters)
+}
+
+// ── 站内通知 ────────────────────────────
+function normalizeNotification(row = {}) {
+  return {
+    id: row.id,
+    title: row.title ?? '',
+    content: row.content ?? '',
+    type: row.notification_type ?? '',
+    priority: row.priority ?? '',
+    publishAt: row.publish_at ?? row.publishAt ?? '',
+    isRead: Boolean(row.is_read ?? row.isRead),
+    readAt: row.read_at ?? row.readAt ?? '',
+  }
+}
+
+export async function fetchNotifications(filters = {}) {
+  const body = await api.notifications(filters)
+  return {
+    items: (Array.isArray(body.items) ? body.items : []).map(normalizeNotification),
+    unreadCount: Number(body.unread_count ?? 0),
+  }
+}
+
+export async function fetchUnreadCount() {
+  const body = await api.notificationUnreadCount()
+  return Number(body.unread_count ?? 0)
+}
+
+export async function markNotificationRead(id) {
+  return normalizeNotification(await api.readNotification(id))
+}
+
+export async function markAllNotificationsRead() {
+  return api.readAllNotifications()
+}
+
+// ── 忘记密码 ────────────────────────────
+export function sendResetCode(email) {
+  return api.forgotPasswordSendCode(email)
+}
+
+export async function verifyResetCode(payload) {
+  const body = await api.forgotPasswordVerifyCode(payload)
+  return { resetToken: body.reset_token ?? body.resetToken ?? '' }
+}
+
+export function resetPassword(payload) {
+  return api.forgotPasswordReset(payload)
 }

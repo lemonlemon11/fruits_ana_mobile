@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="format-detection" content="telephone=no" />
+<meta name="theme-color" content="#123A2A" />
+<title>SLD 销售总览 · 移动端 Demo</title>
+<style>
+:root {
+  --brand: #16794F; --brand-dark: #0E5A38; --brand-soft: #EAF3ED;
+  --ink: #1A2E22; --navy: #123A2A;
+  --page: #F5F7F6; --card: #FFFFFF; --line: #E3E9E5;
+  --muted: #5C6B63;
+  --grade-a: #2E9E6B; --grade-b: #E0A83C; --grade-c: #D97757;
+  --up: #2E9E6B; --down: #D97757;
+  --radius: 14px; --radius-s: 10px;
+  --font-cn: "MiSans","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  --font-num: "Barlow","Avenir Next","Helvetica Neue",Arial,sans-serif;
+  --shadow: 0 1px 2px rgba(26,46,34,.05), 0 10px 28px rgba(26,46,34,.06);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-cn);
+  color: var(--ink);
+  background: #E9EDEA;
+  -webkit-font-smoothing: antialiased;
+}
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.phone {
+  max-width: 430px;
+  min-height: 100vh;
+  margin: 0 auto;
+  background: var(--page);
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  position: relative;
+}
+
+/* ── 深绿头部 ─────────────────────────── */
+.head {
+  background: linear-gradient(160deg, var(--navy) 0%, #0E4730 100%);
+  padding: calc(14px + env(safe-area-inset-top)) 16px 58px;
+  color: #fff;
+}
+.head-row { display: flex; align-items: center; justify-content: space-between; }
+.head-brand { display: flex; align-items: baseline; gap: 8px; }
+.head-title { font-size: 19px; font-weight: 700; letter-spacing: .02em; }
+.head-sub { font-size: 12px; color: rgba(255,255,255,.55); }
+.head-month {
+  display: inline-flex; align-items: center; gap: 4px;
+  min-height: 30px; padding: 0 12px;
+  background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18);
+  border-radius: 999px; color: #fff; font-size: 13px; font-weight: 600;
+}
+
+/* ── 均价主角卡 ──────────────────────── */
+.hero {
+  margin: -46px 16px 12px;
+  background: var(--card); border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 18px 16px;
+}
+.hero-label { display: flex; align-items: center; justify-content: space-between; }
+.hero-label b { font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .04em; }
+.hero-tag { font-size: 11px; color: var(--brand); background: var(--brand-soft); border-radius: 6px; padding: 3px 8px; font-weight: 600; }
+.hero-main { display: flex; align-items: baseline; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.hero-price { font-size: 40px; font-weight: 700; color: var(--ink); line-height: 1; }
+.hero-unit { font-size: 13px; color: var(--muted); }
+.hero-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; font-weight: 700; color: var(--up); margin-left: 4px; }
+.hero-badge.down { color: var(--down); }
+.hero-badge small { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 2px; }
+.hero-subs { display: flex; margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--line); }
+.hero-sub { flex: 1; min-width: 0; }
+.hero-sub + .hero-sub { border-left: 1px solid var(--line); padding-left: 14px; }
+.hero-sub span { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.hero-sub b { font-size: 16px; font-weight: 700; color: var(--ink); }
+
+/* ── 分区标题 ─────────────────────────── */
+.section { padding: 6px 16px 0; }
+.sec-head { display: flex; align-items: center; justify-content: space-between; margin: 14px 2px 10px; }
+.sec-title { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+.sec-title::before { content: ''; width: 4px; height: 15px; border-radius: 2px; background: var(--brand); }
+.sec-more { font-size: 12px; color: var(--muted); }
+
+/* ── 等级行情 ────────────────────────── */
+.grade-card {
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 14px 16px; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 12px;
+  cursor: pointer; transition: transform .15s ease;
+  min-height: 44px;
+}
+.grade-card:active { transform: scale(.985); }
+.grade-card .chev { flex: none; color: #AAB6AE; font-size: 13px; margin-left: -4px; }
+.grade-badge {
+  flex: none; width: 44px; height: 44px; border-radius: 12px;
+  display: grid; place-items: center;
+  font-size: 19px; font-weight: 800; color: #fff;
+}
+.grade-info { flex: 1; min-width: 0; }
+.grade-name { display: flex; align-items: baseline; gap: 8px; }
+.grade-name b { font-size: 15px; font-weight: 700; }
+.grade-name small { font-size: 11px; color: var(--muted); }
+.grade-meta { display: flex; align-items: baseline; gap: 12px; margin-top: 7px; }
+.containers { display: flex; flex-direction: column; }
+.containers span { font-size: 10px; color: var(--muted); }
+.containers b { font-size: 19px; font-weight: 700; }
+.containers b i { font-style: normal; font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 1px; }
+.grade-price { display: flex; flex-direction: column; align-items: flex-end; margin-left: auto; text-align: right; }
+.grade-price span { font-size: 10px; color: var(--muted); }
+.grade-price b { font-size: 21px; font-weight: 700; }
+.grade-price b.price-a { color: var(--grade-a); }
+.grade-price b.price-b { color: #B8860B; }
+.grade-price b.price-empty { color: var(--muted); font-size: 15px; font-weight: 500; }
+.grade-foot { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
+.grade-bar { flex: 1; height: 5px; border-radius: 3px; background: #EEF2EF; overflow: hidden; display: flex; }
+.grade-bar i { height: 100%; }
+.grade-share { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.grade-note {
+  font-size: 11.5px; color: var(--muted); line-height: 1.6;
+  padding: 10px 14px; margin-top: 2px;
+  background: var(--brand-soft); border-radius: var(--radius-s);
+}
+.grade-note b { color: var(--brand-dark); font-weight: 700; }
+.tap-hint { text-align: center; font-size: 11px; color: #A9B4AC; margin: 2px 0 0; }
+
+/* ── 每日走势 ────────────────────────── */
+.chart-card {
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 14px 16px 10px;
+}
+.chart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.chart-title { font-size: 13px; font-weight: 700; }
+.chart-legend { display: flex; gap: 10px; font-size: 11px; color: var(--muted); }
+.chart-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.chart-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chart-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 4px 2px 0; }
+.day-readout {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--brand-soft); border-radius: var(--radius-s);
+  padding: 10px 13px; margin-bottom: 10px;
+}
+.dr-left { display: flex; flex-direction: column; gap: 3px; }
+.dr-date { font-size: 12px; font-weight: 700; color: var(--brand-dark); }
+.dr-sub { font-size: 11px; color: var(--muted); }
+.dr-right { text-align: right; }
+.dr-amt { font-size: 19px; font-weight: 700; color: var(--brand-dark); }
+.dr-badge { font-size: 11px; font-weight: 700; }
+.dr-badge.up { color: var(--up); }
+.dr-badge.down { color: var(--down); }
+.bar-tap { fill: transparent; cursor: pointer; }
+.bar-rect { transition: fill .15s; }
+
+/* ── 最新柜横滑 ──────────────────────── */
+.scroll-row {
+  display: flex; gap: 10px; overflow-x: auto; padding: 2px 16px 6px;
+  scrollbar-width: none;
+}
+.scroll-row::-webkit-scrollbar { display: none; }
+.settle-card {
+  flex: none; width: 150px; background: var(--card);
+  border-radius: var(--radius-s); box-shadow: var(--shadow);
+  padding: 12px 13px 11px;
+}
+.settle-card .m { font-size: 15px; font-weight: 800; }
+.settle-card .c { font-size: 10.5px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settle-card .amt { font-size: 17px; font-weight: 700; margin-top: 8px; }
+.settle-card .g { margin-top: 7px; display: flex; gap: 4px; }
+.pill-a, .pill-b { font-size: 10px; font-weight: 700; border-radius: 5px; padding: 2px 6px; }
+.pill-a { color: var(--grade-a); background: rgba(46,158,107,.12); }
+.pill-b { color: #B8860B; background: rgba(224,168,60,.14); }
+
+/* ── AI 摘要 ─────────────────────────── */
+.ai-card {
+  margin: 0 16px; background: var(--card); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden;
+}
+.ai-head { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 16px; cursor: pointer; user-select: none; }
+.ai-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); }
+.ai-head b { font-size: 14px; }
+.ai-head small { font-size: 10px; color: var(--brand); background: var(--brand-soft); padding: 2px 7px; border-radius: 5px; margin-left: 2px; }
+.ai-arrow { margin-left: auto; color: var(--muted); font-size: 12px; transition: transform .2s; }
+.ai-card.open .ai-arrow { transform: rotate(180deg); }
+.ai-body { max-height: 0; overflow: hidden; transition: max-height .25s ease; font-size: 13px; line-height: 1.75; color: #3D4C43; }
+.ai-card.open .ai-body { max-height: 300px; }
+.ai-body-in { padding: 0 16px 14px; }
+.ai-body b { color: var(--brand-dark); }
+
+/* ── 规格明细抽屉 ────────────────────── */
+.mask {
+  position: fixed; inset: 0; background: rgba(10, 24, 16, .45);
+  opacity: 0; pointer-events: none; transition: opacity .22s; z-index: 20;
+}
+.mask.show { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed; bottom: 0; left: 50%; transform: translate(-50%, 105%);
+  width: 100%; max-width: 430px; max-height: 76vh;
+  background: #fff; border-radius: 18px 18px 0 0;
+  transition: transform .28s cubic-bezier(.22, 1, .36, 1);
+  z-index: 21; display: flex; flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.sheet.show { transform: translate(-50%, 0); }
+.sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: #D8E0DA; margin: 10px auto 2px; }
+.sheet-head { display: flex; align-items: center; gap: 10px; padding: 10px 18px 8px; }
+.sheet-badge { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; color: #fff; font-size: 16px; font-weight: 800; }
+.sheet-title b { display: block; font-size: 16px; }
+.sheet-title small { font-size: 11px; color: var(--muted); }
+.sheet-close { margin-left: auto; width: 32px; height: 32px; border: 0; background: #F0F4F1; border-radius: 50%; color: var(--muted); font-size: 15px; cursor: pointer; }
+.sheet-summary {
+  display: flex; margin: 4px 18px 12px; padding: 10px 0;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.sheet-summary div { flex: 1; text-align: center; }
+.sheet-summary div + div { border-left: 1px solid var(--line); }
+.sheet-summary span { display: block; font-size: 10.5px; color: var(--muted); margin-bottom: 3px; }
+.sheet-summary b { font-size: 16px; font-weight: 700; }
+.sheet-body { overflow-y: auto; padding: 0 18px 18px; }
+.spec-row { padding: 11px 0; border-bottom: 1px solid var(--line); }
+.spec-row:last-child { border-bottom: 0; }
+.spec-line1 { display: flex; align-items: center; gap: 8px; }
+.spec-tag {
+  font-size: 11px; font-weight: 700; border-radius: 6px; padding: 3px 8px;
+  background: var(--brand-soft); color: var(--brand-dark); white-space: nowrap;
+}
+.spec-qty { margin-left: auto; font-size: 14px; font-weight: 700; }
+.spec-qty i { font-style: normal; font-size: 10.5px; color: var(--muted); font-weight: 400; }
+.spec-price { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.sheet.sA .spec-price { color: var(--grade-a); }
+.sheet.sB .spec-price { color: #B8860B; }
+.spec-line2 { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.spec-bar { flex: 1; height: 5px; border-radius: 3px; background: #EEF2EF; overflow: hidden; }
+.spec-bar i { display: block; height: 100%; border-radius: 3px; }
+.sheet.sA .spec-bar i { background: var(--grade-a); }
+.sheet.sB .spec-bar i { background: var(--grade-b); }
+.sheet.sC .spec-bar i { background: var(--grade-c); }
+.spec-share { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.spec-amt { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.sheet-empty { padding: 34px 0 40px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.8; }
+
+/* ── 数据源标识 ──────────────────────── */
+.src-chip {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin: 4px auto 0; width: max-content;
+  font-size: 10.5px; color: var(--muted);
+}
+.src-chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--up); }
+.src-chip.snapshot i { background: #C4CDC7; }
+
+/* ── 底部 Tab ────────────────────────── */
+.tabbar {
+  position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+  width: 100%; max-width: 430px;
+  display: flex; background: rgba(255,255,255,.97);
+  border-top: 1px solid var(--line);
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
+  backdrop-filter: blur(14px); z-index: 10;
+}
+.tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 0 3px; color: #9AA69E; text-decoration: none; }
+.tab svg { width: 22px; height: 22px; }
+.tab span { font-size: 10.5px; }
+.tab.active { color: var(--brand); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <header class="head">
+    <div class="head-row">
+      <div class="head-brand">
+        <div class="head-title">SLD · 销售总览</div>
+        <div class="head-sub">榴莲</div>
+      </div>
+      <div class="head-month">9月 ▾</div>
+    </div>
+  </header>
+
+  <!-- 均价主角卡 -->
+  <section class="hero">
+    <div class="hero-label">
+      <b>整体均价</b>
+      <span class="hero-tag">本页重点指标</span>
+    </div>
+    <div class="hero-main" id="heroMain"></div>
+    <div class="hero-subs" id="heroSubs"></div>
+  </section>
+
+  <!-- 等级行情:柜数 + 均价,点击下钻规格明细 -->
+  <div class="section">
+    <div class="sec-head">
+      <div class="sec-title">等级行情</div>
+      <div class="sec-more">柜数与均价 · 点击看规格明细</div>
+    </div>
+    <div id="gradeList"></div>
+    <div class="grade-note" id="gradeNote"></div>
+    <p class="tap-hint">点击等级卡查看分规格销售明细 ↓</p>
+  </div>
+
+  <!-- 每日走势 -->
+  <div class="section">
+    <div class="sec-head">
+      <div class="sec-title">每日走势</div>
+      <div class="sec-more" id="trendMore">点击柱体看明细</div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title">销售额 × 均价</div>
+        <div class="chart-legend">
+          <span><i style="background:rgba(22,121,79,.30)"></i>销售额</span>
+          <span><i style="background:var(--brand)"></i>均价</span>
+        </div>
+      </div>
+      <div class="day-readout" id="dayReadout"></div>
+      <svg id="trend" class="chart-svg" viewBox="0 0 360 150" role="img" aria-label="每日销售额柱状与均价折线,点击查看当日明细"></svg>
+      <div class="chart-axis" id="trendAxis"></div>
+    </div>
+  </div>
+
+  <!-- 最新柜 -->
+  <div class="section">
+    <div class="sec-head">
+      <div class="sec-title">最新柜 · 结算单</div>
+      <div class="sec-more" id="settleMore"></div>
+    </div>
+  </div>
+  <div class="scroll-row" id="settleRow"></div>
+
+  <!-- AI 摘要 -->
+  <div class="ai-card" id="aiCard">
+    <div class="ai-head" onclick="document.getElementById('aiCard').classList.toggle('open')">
+      <span class="ai-dot"></span>
+      <b>AI 经营摘要</b>
+      <small>可选</small>
+      <span class="ai-arrow">▾</span>
+    </div>
+    <div class="ai-body"><div class="ai-body-in">
+      本期整体均价 <b class="num">¥270.2/件</b>，较月初上涨 11.5%；A 果 16 柜全量产出、均价 <b class="num">¥290.4</b>，主力规格 3头·10kg（12,593 件、占 A 果 62%）是拉高均价的主因。9-15 与 9-17 两个放货日集中出货 1.2 万件。B 果均价 ¥235.7，主力规格 3头·9kg；A/B 价差 ¥54.7/件，建议保持分级出货节奏。
+    </div></div>
+  </div>
+
+  <div class="src-chip" id="srcChip"><i></i><span>数据加载中…</span></div>
+</div>
+
+<!-- 规格明细抽屉 -->
+<div class="mask" id="sheetMask" onclick="closeSheet()"></div>
+<div class="sheet" id="specSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-head">
+    <div class="sheet-badge" id="shBadge">A</div>
+    <div class="sheet-title"><b id="shTitle">A 果</b><small>分规格销售明细 · 头数 / 公斤</small></div>
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+  </div>
+  <div class="sheet-summary" id="shSummary"></div>
+  <div class="sheet-body" id="shBody"></div>
+</div>
+
+<!-- 底部 Tab -->
+<nav class="tabbar">
+  <a class="tab active" href="javascript:void(0)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l5-6 4 4 6-8 3 4"/><path d="M3 21h18"/></svg>
+    <span>总览</span>
+  </a>
+  <a class="tab" href="javascript:void(0)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6l1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2"/></svg>
+    <span>结算单</span>
+  </a>
+  <a class="tab" href="javascript:void(0)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 20V10M12 20V4M18 20v-7"/></svg>
+    <span>对比</span>
+  </a>
+  <a class="tab" href="javascript:void(0)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
+    <span>我的</span>
+  </a>
+</nav>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   数据层:登录态下调真实接口(经 54001 代理到后端 8000);
+   未登录(401)时回退到下方内嵌快照,页面结构完全一致。
+   接口: /api/analytics/overview | /trend | /grade-spec-breakdown
+   ══════════════════════════════════════════════════════════ */
+const FALLBACK = {
+  total: { sales_quantity: 31743, sales_amount: 8577382.99, weighted_avg_price: 270.2134 },
+  trend: [
+    ["09-02", 483640, 1975, 244.9], ["09-03", 493740, 1980, 249.4], ["09-04", 499795, 1977, 252.8],
+    ["09-06", 394005, 1547, 254.7], ["09-07", 116480, 429, 271.5], ["09-10", 361060, 1423, 253.7],
+    ["09-11", 146740, 558, 263.0], ["09-12", 313220, 1106, 283.2], ["09-13", 271930, 936, 290.5],
+    ["09-14", 346160, 1245, 278.0], ["09-15", 1254693, 4629, 271.1], ["09-16", 241270, 822, 293.5],
+    ["09-17", 2044570, 7482, 273.3], ["09-18", 891100, 3000, 297.0], ["09-19", 718980, 2634, 273.0],
+  ],
+  /* 柜号与柜数统计源 */
+  settlements: [
+    { m: "444", c: "test", amt: 568940, grades: { A: 1335, B: 635 } },
+    { m: "629", c: "TRLU1709169", amt: 483640, grades: { A: 1279, B: 696 } },
+    { m: "633", c: "MWCU6759664", amt: 493740, grades: { A: 1286, B: 694 } },
+    { m: "634", c: "EMCU5215797", amt: 499795, grades: { A: 1281, B: 696 } },
+    { m: "638", c: "NYKU701953", amt: 510485, grades: { A: 1282, B: 694 } },
+    { m: "641", c: "NYKU7101033", amt: 507800, grades: { A: 1280, B: 701 } },
+  ],
+  gradeSpecs: {
+    A: { qty: 20242, avg: 290.362, specs: [
+      { head: "3", kg: "10", qty: 12593, avg: 296.6, share: 62.2, amt: 3734495 },
+      { head: "3/4", kg: "10", qty: 4437, avg: 286.7, share: 21.9, amt: 1271888 },
+      { head: "3", kg: null, qty: 1289, avg: 282.8, share: 6.4, amt: 364580 },
+      { head: "4", kg: "10", qty: 585, avg: 286.3, share: 2.9, amt: 167480 },
+      { head: "3", kg: "10/11", qty: 436, avg: 220.0, share: 2.2, amt: 95920 },
+      { head: "3", kg: "9", qty: 423, avg: 271.6, share: 2.1, amt: 114905 },
+      { head: "3", kg: "9/10", qty: 364, avg: 249.4, share: 1.8, amt: 90780 },
+      { head: "3", kg: "11", qty: 112, avg: 325.5, share: 0.6, amt: 36460 },
+      { head: "3", kg: "2", qty: 2, avg: 350.0, share: 0.0, amt: 700 },
+    ] },
+    B: { qty: 11454, avg: 235.6814, specs: [
+      { head: "3", kg: "9", qty: 4880, avg: 238.2, share: 42.6, amt: 1162480 },
+      { head: "3/4", kg: "9", qty: 4569, avg: 231.3, share: 39.9, amt: 1056850 },
+      { head: "4", kg: "9", qty: 699, avg: 246.0, share: 6.1, amt: 171980 },
+      { head: "3/4", kg: null, qty: 689, avg: 234.2, share: 6.0, amt: 161375 },
+      { head: "3", kg: "10", qty: 607, avg: 237.4, share: 5.3, amt: 144110 },
+      { head: "3/4", kg: "10", qty: 10, avg: 270.0, share: 0.1, amt: 2700 },
+    ] },
+    OTHER: { qty: 47, avg: 8.0849, specs: [] },
+  },
+};
+
+const GRADE_META = {
+  A: { name: 'A 果', color: '#2E9E6B', desc: '优质主力' },
+  B: { name: 'B 果', color: '#E0A83C', desc: '次级果' },
+  C: { name: 'C 果', color: '#D97757', desc: '本期无产出' },
+};
+const GRADE_ORDER = ['A', 'B', 'C'];
+
+const state = { total: null, trend: [], settlements: [], gradeSpecs: {}, live: false };
+
+/* ── 工具 ─────────────────────────────── */
+const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+const fmtQty = (v) => Math.round(num(v)).toLocaleString('zh-CN');
+const fmtWan = (v) => { const n = num(v); if (n >= 1e8) return `¥${(n / 1e8).toFixed(2)}亿`; if (n >= 1e4) return `¥${(n / 1e4).toFixed(1)}万`; return `¥${Math.round(n).toLocaleString('zh-CN')}`; };
+const price1 = (v) => `¥${num(v).toFixed(1)}`;
+const price2 = (v) => `¥${num(v).toFixed(2)}`;
+
+/* ── 拉取实时数据(同源携带登录 Cookie) ── */
+async function fetchJson(url) {
+  const resp = await fetch(url, { credentials: 'include' });
+  if (!resp.ok) throw new Error(String(resp.status));
+  return resp.json();
+}
+
+async function loadLive() {
+  const [ov, tr, spec] = await Promise.all([
+    fetchJson('/api/analytics/overview'),
+    fetchJson('/api/analytics/trend'),
+    fetchJson('/api/analytics/grade-spec-breakdown'),
+  ]);
+  state.total = ov.total ?? {};
+  state.trend = (tr.trend ?? []).map((r) => [r.sale_date.slice(5), num(r.sales_amount), num(r.sales_quantity), num(r.weighted_avg_price)]);
+  state.settlements = (ov.settlements ?? []).map((s) => ({
+    m: s.merchant_no_normalized ?? s.merchant_no ?? '',
+    c: s.container_no ?? '—',
+    amt: num((s.total ?? {}).sales_amount),
+    grades: Object.fromEntries((s.grades ?? []).filter((g) => num(g.sales_quantity) > 0).map((g) => [g.grade, num(g.sales_quantity)])),
+  }));
+  state.gradeSpecs = {};
+  (spec.grades ?? []).forEach((g) => {
+    const total = g.total ?? {};
+    state.gradeSpecs[g.grade] = {
+      qty: num(total.sales_quantity),
+      avg: total.weighted_avg_price === null || total.weighted_avg_price === undefined ? null : num(total.weighted_avg_price),
+      specs: (g.specs ?? []).map((s) => ({
+        head: s.piece_count, kg: s.spec_kg,
+        qty: num(s.sales_quantity),
+        avg: s.weighted_avg_price === null || s.weighted_avg_price === undefined ? null : num(s.weighted_avg_price),
+        share: num(s.quantity_share) * 100,
+        amt: num(s.sales_amount),
+      })),
+    };
+  });
+  state.live = true;
+}
+
+function loadFallback() {
+  state.total = FALLBACK.total;
+  state.trend = FALLBACK.trend;
+  state.settlements = FALLBACK.settlements;
+  state.gradeSpecs = FALLBACK.gradeSpecs;
+  state.live = false;
+}
+
+/* ── 渲染:均价主角卡 ─────────────────── */
+function renderHero() {
+  const t = state.total ?? {};
+  const avg = num(t.weighted_avg_price);
+  let badge = '';
+  if (state.trend.length >= 2) {
+    const first = state.trend[0][3], last = state.trend[state.trend.length - 1][3];
+    if (first > 0) {
+      const pct = ((last - first) / first) * 100;
+      badge = `<span class="hero-badge num ${pct < 0 ? 'down' : ''}">${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%<small>较月初</small></span>`;
+    }
+  }
+  document.getElementById('heroMain').innerHTML =
+    `<span class="hero-price num">${avg.toFixed(2)}</span><span class="hero-unit">元/件</span>${badge}`;
+  document.getElementById('heroSubs').innerHTML = `
+    <div class="hero-sub"><span>销售金额</span><b class="num">${fmtWan(t.sales_amount)}</b></div>
+    <div class="hero-sub"><span>销售数量</span><b class="num">${fmtQty(t.sales_quantity)} 件</b></div>
+    <div class="hero-sub"><span>在售柜数</span><b class="num">${state.settlements.length} 柜</b></div>`;
+}
+
+/* ── 渲染:等级行情卡 ─────────────────── */
+function containerCount(grade) {
+  return state.settlements.filter((s) => Number(s.grades?.[grade] ?? 0) > 0).length;
+}
+
+function topSpecDesc(grade) {
+  const specs = state.gradeSpecs[grade]?.specs ?? [];
+  if (!specs.length) return '';
+  const top = specs[0];
+  const head = top.head ? `${top.head}头` : '未标注头数';
+  const kg = top.kg ? `${top.kg}kg` : '未标注公斤';
+  return `主力 ${head}·${kg}`;
+}
+
+function renderGrades() {
+  const el = document.getElementById('gradeList');
+  el.innerHTML = GRADE_ORDER.map((g) => {
+    const meta = GRADE_META[g];
+    const info = state.gradeSpecs[g];
+    const containers = containerCount(g);
+    const has = info && info.qty > 0;
+    const share = state.total && num(state.total.sales_quantity)
+      ? (info ? (info.qty / num(state.total.sales_quantity)) * 100 : 0)
+      : 0;
+    const priceHtml = has
+      ? (info.avg !== null ? `<b class="num ${g === 'A' ? 'price-a' : g === 'B' ? 'price-b' : ''}">${price2(info.avg)}</b>` : '<b class="price-empty">—</b>')
+      : '<b class="price-empty">暂无销售</b>';
+    const desc = has ? `${meta.desc} · ${topSpecDesc(g)}` : meta.desc;
+    return `
+    <div class="grade-card g${g}" onclick="openSheet('${g}')">
+      <div class="grade-badge" style="background:${meta.color}${has ? '' : ';opacity:.55'}">${g}</div>
+      <div class="grade-info">
+        <div class="grade-name"><b>${meta.name}</b><small>${desc}</small></div>
+        <div class="grade-meta">
+          <div class="containers"><span>柜数</span><b class="num">${containers}<i> 柜</i></b></div>
+          <div class="grade-price"><span>均价</span>${priceHtml}</div>
+        </div>
+        <div class="grade-foot">
+          <div class="grade-bar"><i style="width:${Math.min(100, share).toFixed(1)}%;background:${meta.color}"></i></div>
+          <div class="grade-share num">${has ? `销量占比 ${share.toFixed(1)}% · ${fmtWan((info.qty || 0) * (info.avg || 0))}` : '—'}</div>
+        </div>
+      </div>
+      <span class="chev">›</span>
+    </div>`;
+  }).join('');
+
+  const A = state.gradeSpecs.A, B = state.gradeSpecs.B, other = state.gradeSpecs.OTHER;
+  let note = '';
+  if (A && B && A.avg && B.avg) {
+    const diff = A.avg - B.avg;
+    const pct = (diff / B.avg) * 100;
+    note += `价差洞察：A 果均价比 B 果高 <b class="num">¥${diff.toFixed(1)}/件</b>（+${pct.toFixed(1)}%）`;
+    const ta = topSpecDesc('A'), tb = topSpecDesc('B');
+    if (ta && tb) note += `，A ${ta.replace('主力 ', '主力 ')}，B ${tb.replace('主力 ', '主力 ')}`;
+    note += '。';
+  }
+  if (other && other.qty > 0) {
+    note += `另有其他等级 ${fmtQty(other.qty)} 件未计入上表。`;
+  }
+  document.getElementById('gradeNote').innerHTML = note || '暂无等级数据。';
+}
+
+/* ── 渲染:每日走势(柱=额 线=均价) ────── */
+let selectedDay = 0;
+let barRects = [], lineDots = [];
+
+function renderReadout() {
+  const r = state.trend[selectedDay];
+  if (!r) { document.getElementById('dayReadout').innerHTML = ''; return; }
+  const prev = selectedDay > 0 ? state.trend[selectedDay - 1][1] : null;
+  let badge = '';
+  if (prev) {
+    const pct = ((r[1] - prev) / prev) * 100;
+    badge = `<span class="dr-badge num ${pct >= 0 ? 'up' : 'down'}">${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%</span>`;
+  }
+  document.getElementById('dayReadout').innerHTML = `
+    <div class="dr-left">
+      <span class="dr-date num">${r[0]} 当日销售</span>
+      <span class="dr-sub num">件数 ${fmtQty(r[2])} · 均价 ${price1(r[3])}/件</span>
+    </div>
+    <div class="dr-right">
+      <div class="dr-amt num">${fmtWan(r[1])}</div>
+      ${badge}
+    </div>`;
+  barRects.forEach((rect, idx) => {
+    rect.setAttribute('fill', idx === selectedDay ? '#16794F' : 'rgba(22,121,79,.28)');
+    rect.setAttribute('rx', idx === selectedDay ? 3 : 2.5);
+  });
+  lineDots.forEach((dot, idx) => {
+    dot.setAttribute('r', idx === selectedDay ? 3.8 : 2);
+    dot.setAttribute('fill', idx === selectedDay ? '#16794F' : '#fff');
+  });
+}
+
+function renderTrend() {
+  const T = state.trend;
+  document.getElementById('trendMore').textContent = `近 ${T.length} 天 · 点击柱体看明细`;
+  if (!T.length) {
+    document.getElementById('trend').innerHTML = '';
+    document.getElementById('dayReadout').innerHTML = '<span class="dr-sub">暂无趋势数据</span>';
+    document.getElementById('trendAxis').innerHTML = '';
+    return;
+  }
+  const W = 360, H = 150, padB = 6, padT = 8;
+  const n = T.length, gap = 5, bw = (W - 14 * gap) / n;
+  const maxAmt = Math.max(...T.map((r) => r[1]));
+  const prices = T.map((r) => r[3]);
+  const pMin = Math.min(...prices), pMax = Math.max(...prices);
+  const svg = document.getElementById('trend');
+  let bars = "", taps = "", linePts = [];
+  T.forEach((row, i) => {
+    const x = 2 + i * (bw + gap);
+    const h = Math.max(3, (row[1] / maxAmt) * (H - padB - padT - 14));
+    bars += `<rect class="bar-rect" x="${x.toFixed(1)}" y="${(H - padB - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2.5"></rect>`;
+    taps += `<rect class="bar-tap" data-i="${i}" x="${(x - 2).toFixed(1)}" y="0" width="${(bw + 4).toFixed(1)}" height="${H}"></rect>`;
+    const ly = H - padB - 10 - ((row[3] - pMin) / (pMax - pMin || 1)) * (H - padB - padT - 26);
+    linePts.push([x + bw / 2, ly]);
+  });
+  const path = "M " + linePts.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" L ");
+  svg.innerHTML =
+    bars +
+    `<path d="${path}" fill="none" stroke="#16794F" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></path>` +
+    linePts.map((p, i) => `<circle data-i="${i}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2" fill="#fff" stroke="#16794F" stroke-width="1.6"></circle>`).join("") +
+    taps;
+  barRects = [...svg.querySelectorAll('.bar-rect')];
+  lineDots = [...svg.querySelectorAll('circle')];
+  svg.querySelectorAll('.bar-tap').forEach((t) => {
+    t.addEventListener('click', () => { selectedDay = Number(t.dataset.i); renderReadout(); });
+  });
+  const mid = T[Math.floor((n - 1) / 2)];
+  document.getElementById('trendAxis').innerHTML =
+    `<span class="num">${T[0][0]}</span><span class="num">${mid[0]}</span><span class="num">${T[n - 1][0]}</span>`;
+  selectedDay = n - 1;
+  renderReadout();
+}
+
+/* ── 渲染:最新柜 ─────────────────────── */
+function renderSettles() {
+  const list = state.settlements.slice(0, 6);
+  document.getElementById('settleMore').textContent = `全部 ${state.settlements.length} 柜 ›`;
+  document.getElementById('settleRow').innerHTML = list.map((s) => {
+    const pills = Object.keys(s.grades ?? {}).filter((g) => g === 'A' || g === 'B')
+      .map((g) => `<span class="pill-${g.toLowerCase()}">${g}果</span>`).join('');
+    return `
+    <div class="settle-card">
+      <div class="m">商号 ${s.m}</div>
+      <div class="c">柜 ${s.c}</div>
+      <div class="amt num">${fmtWan(s.amt)}</div>
+      <div class="g">${pills}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ── 规格抽屉 ─────────────────────────── */
+function openSheet(g) {
+  const meta = GRADE_META[g];
+  const info = state.gradeSpecs[g];
+  const has = info && info.qty > 0;
+  const sheet = document.getElementById('specSheet');
+  const badge = document.getElementById('shBadge');
+  badge.textContent = g;
+  badge.style.background = meta.color;
+  badge.style.opacity = has ? '1' : '.55';
+  document.getElementById('shTitle').textContent = meta.name;
+  sheet.className = 'sheet show s' + g;
+  document.getElementById('shSummary').innerHTML = has
+    ? `<div><span>柜数</span><b class="num">${containerCount(g)} 柜</b></div>
+       <div><span>总件数</span><b class="num">${fmtQty(info.qty)} 件</b></div>
+       <div><span>每件均价</span><b class="num">${info.avg !== null ? price2(info.avg) : '—'}</b></div>`
+    : `<div style="flex:1"><span>本期 ${meta.name}</span><b style="font-size:14px;color:var(--muted)">暂无销售记录</b></div>`;
+  document.getElementById('shBody').innerHTML = has && info.specs.length
+    ? info.specs.map((s) => `
+      <div class="spec-row">
+        <div class="spec-line1">
+          <span class="spec-tag num">${s.head ? `${s.head} 头` : '未标注头数'} · ${s.kg ? `${s.kg} kg` : '未标注公斤'}</span>
+          <span class="spec-price num">${s.avg !== null ? `${price1(s.avg)}/件` : '—'}</span>
+          <span class="spec-qty num">${fmtQty(s.qty)}<i> 件</i></span>
+        </div>
+        <div class="spec-line2">
+          <div class="spec-bar"><i style="width:${Math.max(1, s.share).toFixed(1)}%"></i></div>
+          <span class="spec-share num">占比 ${s.share.toFixed(1)}%</span>
+          <span class="spec-amt num">${fmtWan(s.amt)}</span>
+        </div>
+      </div>`).join('')
+    : `<div class="sheet-empty">${g === 'C' ? '本期到货柜均为 A + B 级产出<br>暂无 C 果销售记录' : '该等级暂无规格销售明细'}</div>`;
+  document.getElementById('sheetMask').classList.add('show');
+}
+function closeSheet() {
+  document.getElementById('sheetMask').classList.remove('show');
+  document.getElementById('specSheet').classList.remove('show');
+}
+
+/* ── 启动:实时优先,快照兜底 ──────────── */
+(async function init() {
+  try {
+    await loadLive();
+  } catch (e) {
+    loadFallback();
+  }
+  renderHero();
+  renderGrades();
+  renderTrend();
+  renderSettles();
+  const chip = document.getElementById('srcChip');
+  chip.className = 'src-chip' + (state.live ? '' : ' snapshot');
+  chip.querySelector('span').textContent = state.live
+    ? '数据:实时接口 /api/analytics'
+    : '数据:示例快照 · 登录后自动切换实时数据';
+})();
+</script>
+</body>
+</html>
