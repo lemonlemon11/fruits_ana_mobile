@@ -1124,10 +1124,6 @@ function goNotifications() {
             </div>
           </section>
 
-          <div class="src-chip">
-            <i></i>
-            <span>数据 · 实时接口 /api/analytics</span>
-          </div>
           </template>
         </div>
         </van-pull-refresh>
@@ -1324,7 +1320,7 @@ function goNotifications() {
 
 <style scoped>
 .home-page { padding-top: 0; }
-.home-main { padding-bottom: 8px; }
+.home-main { padding-bottom: 0; }
 .state-card { min-height: 220px; }
 .error-text { margin: -4px 0 12px; text-align: center; }
 
@@ -1705,18 +1701,6 @@ function goNotifications() {
 .ai-body-in { padding: 0 16px 14px; }
 .ai-body-in :deep(b) { color: var(--accent-deep); }
 
-/* ── 数据源标识 ───────────────────────── */
-.src-chip {
-  display: flex;
-  width: max-content;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  margin: 4px auto 0;
-  color: var(--text-3);
-  font-size: 10.5px;
-}
-.src-chip i { width: 6px; height: 6px; background: var(--up); border-radius: 50%; }
 
 /* ── 筛选 ─────────────────────────────── */
 .filter-compact {

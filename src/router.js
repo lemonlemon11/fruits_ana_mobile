@@ -62,6 +62,16 @@ const router = createRouter({
   routes,
 })
 
+// 切换菜单/进入新页从顶部开始；浏览器返回（popstate）保留原位置。
+let isBackNavigation = false
+window.addEventListener('popstate', () => {
+  isBackNavigation = true
+})
+router.afterEach(() => {
+  if (!isBackNavigation) window.scrollTo(0, 0)
+  isBackNavigation = false
+})
+
 router.beforeEach(async (to) => {
   if (!currentUser.value) {
     try {

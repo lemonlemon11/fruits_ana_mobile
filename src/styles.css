@@ -72,7 +72,7 @@ input {
   max-width: var(--page-max);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 16px 16px calc(88px + env(safe-area-inset-bottom));
+  padding: 16px 16px calc(14px + env(safe-area-inset-bottom));
 }
 
 .page.no-tabbar {

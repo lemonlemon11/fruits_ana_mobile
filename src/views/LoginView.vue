@@ -9,7 +9,7 @@ const router = useRouter()
 
 const username = ref('')
 const password = ref('')
-const rememberMe = ref(true)
+const rememberMe = ref(false)
 const loading = ref(false)
 const formError = ref('')
 
@@ -84,7 +84,7 @@ async function onSubmit() {
 
           <div class="remember-row">
             <van-checkbox v-model="rememberMe" shape="square" icon-size="16px">
-              记住登录状态
+              30 天免登录
             </van-checkbox>
             <button class="forgot-link" type="button" @click="router.push('/forgot-password')">忘记密码？</button>
           </div>

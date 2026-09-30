@@ -423,37 +423,41 @@ loadSettlements()
   white-space: nowrap;
 }
 .sort-arrow { min-width: 12px; font-size: 12px; font-weight: 600; }
-.brand-filter {
-  display: flex;
-  gap: 7px;
-  padding: 0 0 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.brand-filter::-webkit-scrollbar { display: none; }
+.brand-filter,
 .date-filter {
   display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 7px;
-  padding: 10px 0 0;
+  /* gap 兜底：老内核 WebView 不支持 flex gap，用相邻 margin 保证间距 */
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
 }
+.brand-filter::-webkit-scrollbar,
 .date-filter::-webkit-scrollbar { display: none; }
+.brand-filter .brand-chip + .brand-chip,
+.date-filter .brand-chip + .brand-chip { margin-left: 7px; }
+.date-filter { padding: 10px 0 8px; }
+.brand-filter { padding: 0 0 10px; }
 .list-pull { min-height: 60vh; }
 .amount.payable { color: var(--accent); }
 .brand-chip {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 5px;
   min-height: 30px;
-  padding: 0 11px;
+  padding: 4px 11px;
   color: var(--text-2);
   background: var(--panel-soft);
   border: 0;
   border-radius: 8px;
   font-size: 12px;
+  line-height: 1.2;
   white-space: nowrap;
 }
+.brand-chip > span + span { margin-left: 5px; }
 .brand-chip.active {
   color: #ffffff;
   background: var(--accent);
