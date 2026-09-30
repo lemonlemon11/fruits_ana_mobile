@@ -1,0 +1,14 @@
+.git
+.gitignore
+.dockerignore
+node_modules
+dist
+logs
+.mimosa
+.superpowers
+.zcode
+backup_ui_report_style
+design
+images
+*.log
+.DS_Store

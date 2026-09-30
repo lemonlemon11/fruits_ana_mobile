@@ -34,9 +34,9 @@ onBeforeUnmount(() => window.removeEventListener('api:unauthorized', handleUnaut
         active-color="#16794f"
         inactive-color="#9aa69e"
       >
-        <van-tabbar-item replace to="/home" icon="chart-trending-o">总览</van-tabbar-item>
-        <van-tabbar-item replace to="/settlements" icon="orders-o">结算</van-tabbar-item>
-        <van-tabbar-item replace to="/compare" icon="bar-chart-o">对比</van-tabbar-item>
+        <van-tabbar-item replace to="/home" icon="chart-trending-o">销售总览</van-tabbar-item>
+        <van-tabbar-item replace to="/settlements" icon="orders-o">结算单列表</van-tabbar-item>
+        <van-tabbar-item replace to="/compare" icon="bar-chart-o">销售对比</van-tabbar-item>
         <van-tabbar-item replace to="/mine" icon="user-o">我的</van-tabbar-item>
       </van-tabbar>
     </div>

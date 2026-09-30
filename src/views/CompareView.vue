@@ -122,9 +122,6 @@ const detail = (row, grade, index) =>
   detailRows.value.find((item) => item.grade === grade && ((item.key && item.key === keyOf(row)) || (!item.key && item.index === index)))
 
 const avg = (row, grade, index) => detail(row, grade, index)?.price ?? null
-const maxPrice = computed(() => Math.max(1, ...rows.value.flatMap((row, index) =>
-  grades.value.map((grade) => avg(row, grade, index)).filter((value) => value !== null),
-)))
 const priceText = (value) => (value === null ? '—' : price(value))
 const color = (index) => ROW_COLORS[index % ROW_COLORS.length]
 
@@ -198,6 +195,48 @@ const resultTotalAmount = computed(() => {
   return rows.value.reduce((sum, item) => sum + num(item.salesAmount), 0)
 })
 
+// 号别阶梯：后端 grade_details 的 buckets（按每件均价降序）与跨柜价差洞察。
+const gradeLadder = computed(() => result.value?.gradeLadder ?? null)
+
+// 同期排名：候选项携带的 rank 是同期窗口内全部结算单里的名次。
+const optionByMerchant = computed(() => {
+  const map = new Map()
+  options.value.forEach((item) => {
+    if (item.merchantNo) map.set(item.merchantNo, item)
+  })
+  return map
+})
+const periodRankText = (row) => {
+  const rank = optionByMerchant.value.get(row.merchantNo)?.rank?.salesAmount
+  if (!rank || options.value.length < 3) return ''
+  return `同期金额第 ${rank} / ${options.value.length} 柜`
+}
+
+// 行业默认对比：最新一柜 + 同品牌上一柜（老板的口头问法「这柜比上柜怎么样」）。
+function applyDefaultPair() {
+  if (!options.value.length) return false
+  const byDateDesc = [...options.value].sort((a, b) =>
+    String(b.saleDateEnd || b.arrivalDate || '').localeCompare(
+      String(a.saleDateEnd || a.arrivalDate || ''),
+    ),
+  )
+  const latest = byDateDesc[0]
+  const series = latest.series || latest.brand || ''
+  const mate = byDateDesc
+    .slice(1)
+    .find((item) => (item.series || item.brand || '') === series)
+  if (!mate) return false
+  selected.value = [keyOf(latest), keyOf(mate)]
+  return true
+}
+async function applyQuickPair() {
+  if (applyDefaultPair()) {
+    await generateComparison()
+    return
+  }
+  showToast({ message: '最新柜的同品牌可配对柜数不足（需至少 2 柜），请手动选择', position: 'top' })
+}
+
 const shortName = (row) => row.orderNo || row.series || row.brand || row.merchantNoNormalized || row.merchantNo
 const shortDate = (value) => String(value ?? '').slice(0, 10)
 const optionMeta = (item) => {
@@ -241,17 +280,34 @@ const toBlocks = (raw) => {
 const aiBlocks = computed(() => toBlocks(aiText.value))
 const gradeAiBlocks = computed(() => toBlocks(gradeAiText.value))
 
-async function loadOptions() {
-  loading.value = true
+async function loadOptions({ silent = false } = {}) {
+  // 下拉刷新走静默模式：保留当前对比结果可见，不闪整屏 loading。
+  if (!silent) loading.value = true
   optionsError.value = false
   try {
     options.value = await fetchSettlementOptions()
-    if (!options.value.length) showToast({ message: '暂无结算单', position: 'top' })
+    if (!options.value.length) {
+      showToast({ message: '暂无结算单', position: 'top' })
+    } else if (!selected.value.length && applyDefaultPair()) {
+      // 默认带上「同品牌最近两柜」并直接出对比，老板打开即见结论；
+      // 已有选择（下拉刷新回来）时不覆盖用户的选择。
+      await generateComparison()
+    }
   } catch (error) {
     optionsError.value = true
     showToast({ message: error?.detail || error?.message || '结算单加载失败', type: 'fail', position: 'top' })
   } finally {
     loading.value = false
+  }
+}
+
+// ── 下拉刷新 ──
+const refreshing = ref(false)
+async function onRefresh() {
+  try {
+    await loadOptions({ silent: true })
+  } finally {
+    refreshing.value = false
   }
 }
 
@@ -319,9 +375,10 @@ onMounted(loadOptions)
 
 <template>
   <div class="page compare-page">
-    <van-nav-bar title="品牌对比" fixed placeholder safe-area-inset-top />
+    <van-nav-bar title="销售对比" fixed placeholder safe-area-inset-top />
 
     <main class="compare-main">
+      <van-pull-refresh v-model="refreshing" class="compare-pull" @refresh="onRefresh">
       <header class="page-header compare-header">
         <div class="compare-meta">
           <span class="pill">已选 {{ selected.length }} 张</span>
@@ -343,7 +400,10 @@ onMounted(loadOptions)
         <section class="app-card selection-panel">
           <div class="section-title">
             <span>选择结算单</span>
-            <span class="muted">不限张数 · 需同一品牌</span>
+            <span class="title-side">
+              <span class="muted">需同一品牌</span>
+              <button class="quick-pair-btn" type="button" @click="applyQuickPair">同品牌最近两柜</button>
+            </span>
           </div>
           <button class="picker-trigger" type="button" @click="openPicker">
             <span class="picker-trigger-value" :class="{ placeholder: !selected.length }">
@@ -382,8 +442,8 @@ onMounted(loadOptions)
         </section>
 
         <section v-else-if="!result" class="app-card state-card">
-          <van-empty image="chart" description="数据已就绪" />
-          <p class="muted">已选择 {{ selected.length }} 个结算单，点击“生成对比”获取结果。</p>
+          <van-empty image="default" description="已选好结算单" />
+          <p class="muted">已选择 {{ selected.length }} 张，点击「生成对比」查看汇总、等级均价与结构占比。</p>
         </section>
 
         <template v-else>
@@ -405,6 +465,7 @@ onMounted(loadOptions)
                   <span>{{ shortName(item) }}</span>
                   <span v-if="index === bestAmountIndex" class="best-mark">金额最高</span>
                   <span v-else-if="index === bestAvgPriceIndex" class="best-mark">均价最高</span>
+                  <span v-if="periodRankText(item)" class="period-rank mono">{{ periodRankText(item) }}</span>
                 </div>
                 <div class="summary-stats">
                   <div class="summary-stat">
@@ -427,7 +488,7 @@ onMounted(loadOptions)
           <section class="app-card">
             <div class="section-title">
               <span>等级均价对比</span>
-              <span class="muted">元/斤 · <i class="best-legend"></i> 为该等级最高</span>
+              <span class="muted">元/件 · <i class="best-legend"></i> 为该等级最高</span>
             </div>
             <div v-if="grades.length" class="scroll-box">
               <div class="grade-price-table">
@@ -527,40 +588,105 @@ onMounted(loadOptions)
             <p v-else class="muted analysis-hint">可生成对比结论；若服务未配置，会给出友好提示。</p>
           </section>
 
-          <section class="app-card intelligence-panel">
+          <section
+            v-if="gradeLadder && (gradeLadder.buckets.length || gradeLadder.crossGaps.length)"
+            class="app-card ladder-panel"
+          >
             <div class="section-title">
-              <span>号别细分 · AI 小结</span>
-              <span class="muted">可选</span>
+              <span>号别价格阶梯</span>
+              <span class="muted">元/件 · 按均价从高到低</span>
             </div>
-            <van-button
-              size="small"
-              round
-              type="primary"
-              plain
-              :loading="gradeAiBusy"
-              loading-text="分析中…"
-              :disabled="gradeAiBusy"
-              @click="generateGradeAnalysis"
-            >
-              生成号别小结
-            </van-button>
-            <div v-if="gradeAiBusy" class="analysis-loading">
-              <van-loading color="var(--accent)" size="18px" />
-              <span class="muted">正在按号别拆解价格与品质…</span>
+
+            <div v-if="gradeLadder.buckets.length" class="ladder-list">
+              <div
+                v-for="(row, ladderIndex) in gradeLadder.buckets"
+                :key="`${row.fruitType}-${row.grade}-${row.label}`"
+                class="ladder-row"
+              >
+                <div class="ladder-main">
+                  <span class="ladder-label">
+                    <i class="grade-dot" :style="{ backgroundColor: gradeColor(row.grade) }"></i>
+                    <b class="mono">{{ row.label }}</b>
+                    <span class="ladder-grade">{{ gradeLabel(row.grade) }}</span>
+                    <span v-for="mark in row.qualityMarks" :key="mark" class="quality-mark">{{ mark }}</span>
+                  </span>
+                  <span class="ladder-price mono" :class="{ top: ladderIndex === 0 }">{{ priceText(row.weightedAvgPrice) }}</span>
+                </div>
+                <div class="ladder-sub">
+                  <div class="progress-track ladder-track">
+                    <div
+                      class="progress-fill"
+                      :style="{
+                        width: `${Math.max(0, Math.min(100, (row.quantityShare ?? 0) * 100))}%`,
+                        backgroundColor: gradeColor(row.grade),
+                      }"
+                    ></div>
+                  </div>
+                  <span class="ladder-qty mono">{{ number(row.salesQuantity) }} 件 · {{ percent(row.quantityShare) }}</span>
+                </div>
+              </div>
             </div>
-            <div v-else-if="gradeAiError" class="analysis-error">
-              <span>号别细分分析暂不可用</span>
-              <p>{{ gradeAiError }}</p>
+            <p v-else class="muted">暂无号别数据：所选结算单的等级写法未能解析出号别。</p>
+            <p v-if="gradeLadder.unrecognizedQuantity" class="muted ladder-note">
+              另有 {{ number(gradeLadder.unrecognizedQuantity) }} 件未识别等级写法，未计入阶梯。
+            </p>
+
+            <div v-if="gradeLadder.crossGaps.length" class="ladder-gaps">
+              <div class="section-subtitle">
+                <span>同号别跨柜价差</span>
+                <span class="muted">同样的号别，哪张单卖得贵</span>
+              </div>
+              <div
+                v-for="gap in gradeLadder.crossGaps.slice(0, 5)"
+                :key="`${gap.label}-${gap.topMerchant}-${gap.bottomMerchant}`"
+                class="gap-row"
+              >
+                <div class="gap-head">
+                  <span class="gap-label mono">{{ gap.label }}</span>
+                  <span class="gap-diff mono">差 {{ price(gap.diff) }}</span>
+                </div>
+                <div class="gap-body">
+                  <span class="gap-side top"><i>高</i>{{ gap.topMerchant }} {{ priceText(gap.topPrice) }} · {{ number(gap.topQuantity) }} 件</span>
+                  <span class="gap-side"><i>低</i>{{ gap.bottomMerchant }} {{ priceText(gap.bottomPrice) }} · {{ number(gap.bottomQuantity) }} 件</span>
+                </div>
+              </div>
             </div>
-            <div v-else-if="gradeAiBlocks.length" class="analysis-content">
-              <template v-for="(block, blockIndex) in gradeAiBlocks" :key="blockIndex">
-                <p v-if="block.type === 'para'" class="analysis-para">{{ block.text }}</p>
-                <ul v-else class="analysis-list">
-                  <li v-for="(line, lineIndex) in block.items" :key="lineIndex">{{ line }}</li>
-                </ul>
-              </template>
+
+            <div class="ladder-ai">
+              <div class="section-subtitle">
+                <span>AI 解读</span>
+                <span class="muted">可选</span>
+              </div>
+              <van-button
+                size="small"
+                round
+                type="primary"
+                plain
+                :loading="gradeAiBusy"
+                loading-text="分析中…"
+                :disabled="gradeAiBusy"
+                @click="generateGradeAnalysis"
+              >
+                生成号别解读
+              </van-button>
+              <div v-if="gradeAiBusy" class="analysis-loading">
+                <van-loading color="var(--accent)" size="18px" />
+                <span class="muted">正在按号别拆解价格与品质…</span>
+              </div>
+              <div v-else-if="gradeAiError" class="analysis-error">
+                <span>号别解读暂不可用</span>
+                <p>{{ gradeAiError }}</p>
+              </div>
+              <div v-else-if="gradeAiBlocks.length" class="analysis-content">
+                <template v-for="(block, blockIndex) in gradeAiBlocks" :key="blockIndex">
+                  <p v-if="block.type === 'para'" class="analysis-para">{{ block.text }}</p>
+                  <ul v-else class="analysis-list">
+                    <li v-for="(line, lineIndex) in block.items" :key="lineIndex">{{ line }}</li>
+                  </ul>
+                </template>
+              </div>
+              <p v-else class="muted analysis-hint">基于上方号别阶梯生成解读，含品质标记（熟/裂/黄皮）对价格的影响。</p>
             </div>
-            <p v-else class="muted analysis-hint">按号别（如 D90、D80）对比各结算单价格与品质标记。</p>
           </section>
         </template>
 
@@ -616,22 +742,26 @@ onMounted(loadOptions)
           </div>
         </van-popup>
       </template>
+      </van-pull-refresh>
     </main>
   </div>
 </template>
 
 <style scoped>
 .compare-page { min-height: 100vh; overflow-x: hidden; }
+.compare-pull { min-height: 70vh; }
 .compare-main { display: flex; flex-direction: column; }
+.compare-main .app-card { margin-bottom: 16px; }
 .compare-header { margin: 4px 2px 12px; }
 .compare-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
 .loading-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 180px; text-align: center; }
 .selection-panel { padding: 16px; }
-.picker-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 46px; padding: 0 12px; color: var(--text); background: var(--panel-soft); border: 0; border-radius: 8px; text-align: left; }
+.picker-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 48px; padding: 0 14px; color: var(--text); background: var(--panel-soft); border: 0; border-radius: 10px; text-align: left; }
 .picker-trigger-value { flex: 1; min-width: 0; overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .picker-trigger-value.placeholder { color: var(--text-3); font-weight: 400; }
 .picker-trigger-arrow { flex-shrink: 0; color: var(--text-3); font-size: 16px; }
 .selected-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.selection-panel .van-button { margin-top: 14px; }
 .compare-picker { max-height: 78vh; display: flex; flex-direction: column; }
 .picker-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 16px 2px; }
 .picker-title { color: var(--text); font-size: 16px; font-weight: 700; }
@@ -649,13 +779,12 @@ onMounted(loadOptions)
 .option-order { overflow: hidden; color: var(--text); font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .option-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .option-amount { color: var(--text-2); font-size: 13px; font-weight: 700; text-align: right; white-space: nowrap; }
-.summary-overview { margin-bottom: 14px; }
+.summary-overview { margin-bottom: 16px; }
 .summary-total { display: flex; flex-direction: column; gap: 6px; }
 .summary-total-value { color: var(--text); font-size: 24px; font-weight: 800; letter-spacing: -0.01em; }
-.summary-list { display: flex; flex-direction: column; gap: 10px; }
-.settlement-card { padding: 13px 0; border-bottom: 1px solid var(--line); }
-.settlement-card:last-child { border-bottom: 0; padding-bottom: 2px; }
-.settlement-name { display: flex; align-items: center; gap: 6px; min-width: 0; margin-bottom: 11px; overflow: hidden; color: var(--text); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.summary-list { display: flex; flex-direction: column; gap: 12px; }
+.settlement-card { padding: 14px; background: var(--panel-soft); border-radius: 12px; }
+.settlement-name { display: flex; align-items: center; gap: 6px; min-width: 0; margin-bottom: 12px; overflow: hidden; color: var(--text); font-size: 13px; font-weight: 700; white-space: nowrap; }
 .settlement-name span:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .best-mark {
   flex: none;
@@ -667,7 +796,7 @@ onMounted(loadOptions)
   font-size: 10px;
   font-weight: 700;
 }
-.summary-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.summary-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .share-mode-toggle { display: inline-flex; gap: 4px; }
 .mode-chip {
   padding: 2px 10px;
@@ -680,36 +809,101 @@ onMounted(loadOptions)
 }
 .mode-chip.active { color: #ffffff; background: var(--accent); font-weight: 600; }
 .summary-stat { min-width: 0; }
-.summary-stat .metric-label { margin-bottom: 5px; font-size: 11px; }
+.summary-stat .metric-label { margin-bottom: 6px; font-size: 11px; }
 .summary-value { display: block; overflow: hidden; color: var(--text-2); font-size: 16px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .summary-value.lead { color: var(--accent); font-weight: 800; }
 .row-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; }
 .scroll-box { overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
 .scroll-box::-webkit-scrollbar { display: none; }
 .grade-price-table { width: max-content; min-width: 100%; overflow: hidden; background: var(--panel-soft); border-radius: 10px; }
-.grade-price-row { display: flex; min-height: 44px; background: var(--panel); }
+.grade-price-row { display: flex; min-height: 50px; background: var(--panel); }
 .grade-price-row + .grade-price-row { border-top: 1px solid var(--line); }
-.grade-price-head { min-height: 32px; color: var(--text-3); background: var(--panel-soft); font-size: 12px; font-weight: 600; }
+.grade-price-head { min-height: 38px; color: var(--text-3); background: var(--panel-soft); font-size: 12px; font-weight: 600; }
 .grade-price-name { display: flex; align-items: center; gap: 6px; flex: 0 0 124px; min-width: 0; padding: 0 12px; color: var(--text-2); font-size: 12px; white-space: nowrap; }
 .grade-price-cell { display: flex; align-items: center; justify-content: flex-end; flex: 0 0 72px; padding: 0 12px; color: var(--text-2); font-size: 13px; font-weight: 500; white-space: nowrap; }
 .grade-price-cell.best { color: var(--accent); font-weight: 800; }
 .grade-price-head .grade-price-cell { justify-content: center; color: var(--text-3); font-weight: 600; }
 .best-legend { display: inline-block; width: 10px; height: 3px; margin: 0 2px -1px 2px; background: var(--accent); border-radius: 2px; vertical-align: middle; }
-.share-list { display: flex; flex-direction: column; gap: 10px; }
-.share-card { padding: 13px 0; border-bottom: 1px solid var(--line); }
-.share-card:last-child { border-bottom: 0; padding-bottom: 2px; }
-.share-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.share-list { display: flex; flex-direction: column; gap: 12px; }
+.share-card { padding: 14px; background: var(--panel-soft); border-radius: 12px; }
+.share-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .share-name { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; color: var(--text); font-size: 13px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .share-total { color: var(--text-2); font-size: 12px; white-space: nowrap; }
-.share-track { display: flex; height: 12px; overflow: hidden; }
+.share-track { display: flex; height: 14px; overflow: hidden; }
 .share-segment { min-width: 4px; height: 100%; }
-.share-meta { display: flex; flex-direction: column; gap: 8px; margin-top: 11px; }
+.share-meta { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 .share-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .share-grade { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--text-2); font-size: 11px; }
 .dominant-mark { padding: 0 5px; color: var(--accent); background: rgba(22, 121, 79, 0.09); border-radius: 4px; font-size: 10px; font-weight: 700; }
 .share-percent { color: var(--text-2); font-size: 11px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .share-percent.lead { color: var(--text); font-weight: 800; }
 .intelligence-panel .van-button { align-self: flex-start; }
+.title-side { display: inline-flex; align-items: center; gap: 8px; }
+.quick-pair-btn {
+  padding: 3px 10px;
+  color: var(--accent);
+  background: rgba(22, 121, 79, 0.09);
+  border: 0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.period-rank {
+  flex: none;
+  margin-left: auto;
+  padding: 1px 6px;
+  color: var(--text-3);
+  background: var(--bg-soft);
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ladder-panel { display: flex; flex-direction: column; }
+.ladder-row { padding: 10px 0; border-bottom: 1px dashed var(--line); }
+.ladder-row:last-of-type { border-bottom: 0; padding-bottom: 4px; }
+.ladder-main { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ladder-label { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.ladder-label b { color: var(--text); font-size: 14px; font-weight: 800; }
+.ladder-grade { flex: none; color: var(--text-3); font-size: 11px; white-space: nowrap; }
+.quality-mark {
+  flex: none;
+  padding: 0 5px;
+  color: #a1622f;
+  background: rgba(224, 168, 60, 0.14);
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.ladder-price { flex: none; color: var(--text); font-size: 15px; font-weight: 700; white-space: nowrap; }
+.ladder-price.top { color: var(--accent); font-weight: 800; }
+.ladder-sub { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.ladder-track { flex: 1; height: 6px; }
+.ladder-qty { flex: none; color: var(--text-3); font-size: 11px; white-space: nowrap; }
+.ladder-note { margin: 8px 0 0; font-size: 11px; }
+.ladder-gaps { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.section-subtitle { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: var(--text); font-size: 13px; font-weight: 700; }
+.section-subtitle .muted { font-size: 11px; font-weight: 400; }
+.gap-row { margin-top: 10px; padding: 10px 12px; background: var(--panel-soft); border-radius: 10px; }
+.gap-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.gap-label { color: var(--text); font-size: 13px; font-weight: 800; }
+.gap-diff { color: var(--danger); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.gap-body { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.gap-side { display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: 11px; }
+.gap-side i {
+  flex: none;
+  padding: 0 4px;
+  color: var(--text-3);
+  background: var(--bg-soft);
+  border-radius: 3px;
+  font-size: 10px;
+  font-style: normal;
+}
+.gap-side.top i { color: var(--accent); background: rgba(22, 121, 79, 0.09); }
+.ladder-ai { display: flex; flex-direction: column; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ladder-ai .van-button { align-self: flex-start; }
 .analysis-loading { display: flex; align-items: center; gap: 10px; min-height: 52px; margin-top: 14px; color: var(--text-2); }
 .analysis-error { margin-top: 14px; padding: 12px 14px; color: var(--text-2); background: rgba(255, 97, 120, 0.08); border: 1px solid rgba(255, 97, 120, 0.22); border-radius: 10px; }
 .analysis-error span { display: block; margin-bottom: 6px; color: var(--danger); font-size: 13px; font-weight: 700; }

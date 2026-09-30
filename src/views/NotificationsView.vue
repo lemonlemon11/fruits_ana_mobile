@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onActivated, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showSuccessToast, showToast } from 'vant'
 import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from '../api/data'
@@ -47,8 +47,9 @@ function plainText(value) {
     .trim()
 }
 
-async function load() {
-  loading.value = true
+async function load({ silent = false } = {}) {
+  // 下拉刷新走静默模式，保留当前列表可见。
+  if (!silent) loading.value = true
   error.value = ''
   try {
     const result = await fetchNotifications({ limit: 100 })
@@ -90,8 +91,17 @@ async function readAll() {
   }
 }
 
+// ── 下拉刷新 ──
+const refreshing = ref(false)
+async function onRefresh() {
+  try {
+    await load({ silent: true })
+  } finally {
+    refreshing.value = false
+  }
+}
+
 onMounted(load)
-onActivated(load)
 </script>
 
 <template>
@@ -108,38 +118,40 @@ onActivated(load)
       </template>
     </van-nav-bar>
 
-    <div v-if="loading" class="state-card">
-      <van-loading color="var(--accent)" size="22">加载通知中...</van-loading>
-    </div>
+    <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+      <div v-if="loading" class="state-card">
+        <van-loading color="var(--accent)" size="22">加载通知中...</van-loading>
+      </div>
 
-    <div v-else-if="error" class="state-card">
-      <p class="muted">{{ error }}</p>
-      <van-button type="primary" size="small" round @click="load">重新加载</van-button>
-    </div>
+      <div v-else-if="error" class="state-card">
+        <p class="muted">{{ error }}</p>
+        <van-button type="primary" size="small" round @click="load">重新加载</van-button>
+      </div>
 
-    <van-empty v-else-if="!notifications.length" image="search" description="暂无消息通知" />
+      <van-empty v-else-if="!notifications.length" image="search" description="暂无消息通知" />
 
-    <div v-else class="notice-list">
-      <article
-        v-for="item in notifications"
-        :key="item.id"
-        class="notice-item"
-        :class="{ unread: !item.isRead, open: expandedId === item.id }"
-        @click="toggleItem(item)"
-      >
-        <div class="notice-head">
-          <span v-if="!item.isRead" class="unread-dot"></span>
-          <b class="notice-title">{{ item.title || '未命名通知' }}</b>
-          <span class="notice-tag" :class="{ hot: item.priority === 'high' }">{{ priorityText(item.priority) }}</span>
-        </div>
-        <div class="notice-meta mono">
-          <span>{{ typeText(item.type) }}</span>
-          <span v-if="formatTime(item.publishAt)">{{ formatTime(item.publishAt) }}</span>
-        </div>
-        <p class="notice-content">{{ plainText(item.content) || '（无内容）' }}</p>
-      </article>
-      <p class="list-end muted">共 {{ notifications.length }} 条 · 未读 {{ unreadCount }} 条</p>
-    </div>
+      <div v-else class="notice-list">
+        <article
+          v-for="item in notifications"
+          :key="item.id"
+          class="notice-item"
+          :class="{ unread: !item.isRead, open: expandedId === item.id }"
+          @click="toggleItem(item)"
+        >
+          <div class="notice-head">
+            <span v-if="!item.isRead" class="unread-dot"></span>
+            <b class="notice-title">{{ item.title || '未命名通知' }}</b>
+            <span class="notice-tag" :class="{ hot: item.priority === 'high' }">{{ priorityText(item.priority) }}</span>
+          </div>
+          <div class="notice-meta mono">
+            <span>{{ typeText(item.type) }}</span>
+            <span v-if="formatTime(item.publishAt)">{{ formatTime(item.publishAt) }}</span>
+          </div>
+          <p class="notice-content">{{ plainText(item.content) || '（无内容）' }}</p>
+        </article>
+        <p class="list-end muted">共 {{ notifications.length }} 条 · 未读 {{ unreadCount }} 条</p>
+      </div>
+    </van-pull-refresh>
   </div>
 </template>
 

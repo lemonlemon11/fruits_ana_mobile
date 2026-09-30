@@ -4,8 +4,12 @@ import './styles.css'
 import App from './App.vue'
 import router from './router'
 
+import ActionSheet from 'vant/es/action-sheet'
+import 'vant/es/action-sheet/style'
 import Button from 'vant/es/button'
 import 'vant/es/button/style'
+import Calendar from 'vant/es/calendar'
+import 'vant/es/calendar/style'
 import ConfigProvider from 'vant/es/config-provider'
 import 'vant/es/config-provider/style'
 import Cell from 'vant/es/cell'
@@ -26,12 +30,16 @@ import Icon from 'vant/es/icon'
 import 'vant/es/icon/style'
 import Loading from 'vant/es/loading'
 import 'vant/es/loading/style'
+import List from 'vant/es/list'
+import 'vant/es/list/style'
 import NavBar from 'vant/es/nav-bar'
 import 'vant/es/nav-bar/style'
 import NoticeBar from 'vant/es/notice-bar'
 import 'vant/es/notice-bar/style'
 import Progress from 'vant/es/progress'
 import 'vant/es/progress/style'
+import PullRefresh from 'vant/es/pull-refresh'
+import 'vant/es/pull-refresh/style'
 import Popup from 'vant/es/popup'
 import 'vant/es/popup/style'
 import Search from 'vant/es/search'
@@ -48,7 +56,9 @@ import 'vant/es/dialog/style'
 const app = createApp(App)
 
 const components = [
+  ActionSheet,
   Button,
+  Calendar,
   ConfigProvider,
   Cell,
   CellGroup,
@@ -59,9 +69,11 @@ const components = [
   Form,
   Icon,
   Loading,
+  List,
   NavBar,
   NoticeBar,
   Progress,
+  PullRefresh,
   Popup,
   Search,
   Tabbar,

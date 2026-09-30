@@ -15,7 +15,9 @@ const formError = ref('')
 
 const redirect = computed(() => {
   const target = route.query.redirect
-  return typeof target === 'string' && target.startsWith('/') ? target : '/home'
+  // 只接受站内相对路径，拒绝 `//host` 这类协议相对地址。
+  const safe = typeof target === 'string' && target.startsWith('/') && !target.startsWith('//')
+  return safe ? target : '/home'
 })
 
 const usernameRules = [{ required: true, message: '请输入用户名' }]

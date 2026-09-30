@@ -1,23 +1,37 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog } from 'vant'
-import { authReady, currentUser, logout } from '../store/auth'
+import { authReady, currentUser, logout, refreshCurrentUser } from '../store/auth'
+import { version } from '../../package.json'
 
 const router = useRouter()
+
+// 版本号单一来源：package.json，避免硬编码后升级遗漏。
+const appVersion = `v${version}`
 
 const user = computed(() => currentUser.value)
 const avatarText = computed(() => user.value?.displayName?.trim().slice(0, 1) || 'U')
 
-const roleLabel = computed(() => {
-  const permissions = user.value?.permissions ?? []
-  if (!permissions.length) return '分析用户'
+// ── 下拉刷新：重新拉取账号信息（角色/权限可能被管理端调整）──
+const refreshing = ref(false)
+async function onRefresh() {
+  try {
+    await refreshCurrentUser()
+  } catch {
+    // 静默失败，保持当前展示。
+  } finally {
+    refreshing.value = false
+  }
+}
 
-  const normalized = permissions.map((item) => String(item).toLowerCase())
+// 权限码是管理端 RBAC 技术字段（如 ai:refresh），只映射为业务角色名，不直接透出
+const roleLabel = computed(() => {
+  const normalized = (user.value?.permissions ?? []).map((item) => String(item).toLowerCase())
   if (normalized.includes('admin') || normalized.includes('*')) return '系统管理员'
   if (normalized.some((item) => item.includes('admin') || item.includes('all'))) return '全量数据'
   if (normalized.some((item) => item.includes('merchant') || item.includes('sales'))) return '销售分析'
-  return permissions[0]
+  return '分析用户'
 })
 
 const accountLabel = computed(() => {
@@ -25,18 +39,10 @@ const accountLabel = computed(() => {
   return account || '未绑定账号'
 })
 
-const permissionText = computed(() => {
-  const permissions = user.value?.permissions ?? []
-  if (!permissions.length) return '默认数据范围'
-  return permissions.length <= 2
-    ? permissions.join(' / ')
-    : `${permissions.length} 项权限`
-})
-
 function handleLogout() {
   showConfirmDialog({
     title: '退出登录',
-    message: '确认结束当前安全会话并返回登录页？',
+    message: '确认退出当前账号并返回登录页？',
     confirmButtonText: '退出',
     confirmButtonColor: 'var(--danger)',
   })
@@ -55,11 +61,8 @@ function handleLogout() {
   <div class="mine-page page">
     <van-nav-bar title="我的" fixed placeholder safe-area-inset-top />
 
+    <van-pull-refresh v-model="refreshing" class="mine-pull" @refresh="onRefresh">
     <template v-if="user">
-      <header class="page-header mine-header">
-        <p class="mine-role"><span class="pill">{{ roleLabel }}</span></p>
-      </header>
-
       <section class="app-card profile-card">
         <div class="profile-avatar mono">{{ avatarText }}</div>
         <div class="profile-info">
@@ -80,16 +83,8 @@ function handleLogout() {
             <strong class="data-value mono">{{ accountLabel }}</strong>
           </div>
           <div class="data-row">
-            <span class="data-label">数据权限</span>
-            <strong class="data-value mono">{{ permissionText }}</strong>
-          </div>
-          <div class="data-row">
             <span class="data-label">系统版本</span>
-            <strong class="data-value mono">水果销售分析系统 v1.0.0</strong>
-          </div>
-          <div class="data-row">
-            <span class="data-label">安全状态</span>
-            <strong class="data-value mono">安全会话</strong>
+            <strong class="data-value mono">水果销售分析系统 {{ appVersion }}</strong>
           </div>
         </div>
       </section>
@@ -118,13 +113,13 @@ function handleLogout() {
         </van-button>
       </template>
     </div>
+    </van-pull-refresh>
   </div>
 </template>
 
 <style scoped>
-.mine-page { padding-top: 10px; }
-.mine-header { margin: 8px 2px 14px; }
-.mine-role { margin: 0; }
+.mine-page { padding-top: 12px; }
+.mine-pull { min-height: 70vh; }
 .profile-card { display: flex; align-items: center; gap: 14px; padding: 18px; }
 .profile-avatar { flex: 0 0 auto; display: grid; width: 56px; height: 56px; place-items: center; color: #ffffff; background: var(--accent); border-radius: 14px; font-size: 26px; font-weight: 800; }
 .profile-info { flex: 1; min-width: 0; }

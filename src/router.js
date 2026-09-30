@@ -25,7 +25,7 @@ const routes = [
     path: '/settlements',
     name: 'settlements',
     component: () => import('./views/SettlementListView.vue'),
-    meta: { requiresAuth: true, tabbar: true, title: '结算单' },
+    meta: { requiresAuth: true, tabbar: true, title: '结算单列表' },
   },
   {
     path: '/settlement/:id',
@@ -37,7 +37,7 @@ const routes = [
     path: '/compare',
     name: 'compare',
     component: () => import('./views/CompareView.vue'),
-    meta: { requiresAuth: true, tabbar: true, title: '品牌对比' },
+    meta: { requiresAuth: true, tabbar: true, title: '销售对比' },
   },
   {
     path: '/mine',

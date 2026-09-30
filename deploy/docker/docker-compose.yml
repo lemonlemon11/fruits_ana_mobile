@@ -1,0 +1,21 @@
+name: fruits-ana-mobile
+
+services:
+  mobile-web:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.fruits-mobile-web
+    image: fruits-ana-mobile-web:local
+    network_mode: host
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - --spider
+        - http://127.0.0.1:54001/
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s

@@ -14,8 +14,22 @@ const passwordConfirm = ref('')
 const resetToken = ref('')
 const busy = ref(false)
 const formError = ref('')
-// 已发送过验证码后允许「重新发送」。
+// 已发送过验证码后允许「重新发送」，并加 60s 冷却倒计时防连点。
 const codeSent = ref(false)
+const resendCooldown = ref(0)
+let resendTimer = null
+
+function startResendCooldown() {
+  resendCooldown.value = 60
+  if (resendTimer) clearInterval(resendTimer)
+  resendTimer = setInterval(() => {
+    resendCooldown.value -= 1
+    if (resendCooldown.value <= 0) {
+      clearInterval(resendTimer)
+      resendTimer = null
+    }
+  }, 1000)
+}
 
 const stepTitle = computed(() =>
   step.value === 1 ? '验证邮箱' : step.value === 2 ? '输入验证码' : '设置新密码',
@@ -50,6 +64,7 @@ async function onSendCode() {
     await sendResetCode(email.value.trim())
     codeSent.value = true
     step.value = 2
+    startResendCooldown()
     showSuccessToast('验证码已发送')
   } catch (err) {
     fail(err)
@@ -154,7 +169,12 @@ function goBack() {
             :rules="codeRules"
           />
           <p class="resend-row">
-            <button type="button" class="resend-link" :disabled="busy" @click="onSendCode">重新发送验证码</button>
+            <button
+              type="button"
+              class="resend-link"
+              :disabled="busy || resendCooldown > 0"
+              @click="onSendCode"
+            >{{ resendCooldown > 0 ? `重新发送（${resendCooldown}s）` : '重新发送验证码' }}</button>
           </p>
           <p v-if="formError" class="form-error" role="alert">
             <van-icon name="warning-o" />

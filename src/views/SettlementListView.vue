@@ -51,19 +51,77 @@ const activeSortLabel = computed(() => {
   return `${current?.label || '日期'} ${sortOrder.value === 'desc' ? '降序' : '升序'}`
 })
 
-async function loadSettlements() {
-  loading.value = true
+// ── 日期快捷筛选：不传日期时后端默认最近一月 ──
+const datePresets = [
+  { label: '近一月', value: 'default' },
+  { label: '本月', value: 'this_month' },
+  { label: '上月', value: 'last_month' },
+  { label: '近三月', value: 'last_3m' },
+  { label: '近一年', value: 'last_1y' },
+]
+const datePreset = ref('default')
+
+function presetRange(value) {
+  const pad = (part) => String(part).padStart(2, '0')
+  const fmt = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  const today = new Date()
+  if (value === 'this_month') {
+    return { startDate: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), endDate: fmt(today) }
+  }
+  if (value === 'last_month') {
+    return {
+      startDate: fmt(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
+      endDate: fmt(new Date(today.getFullYear(), today.getMonth(), 0)),
+    }
+  }
+  if (value === 'last_3m') {
+    const start = new Date(today)
+    start.setMonth(start.getMonth() - 3)
+    return { startDate: fmt(start), endDate: fmt(today) }
+  }
+  if (value === 'last_1y') {
+    const start = new Date(today)
+    start.setFullYear(start.getFullYear() - 1)
+    return { startDate: fmt(start), endDate: fmt(today) }
+  }
+  return { startDate: '', endDate: '' }
+}
+
+const activeRange = computed(() => presetRange(datePreset.value))
+
+function selectDatePreset(value) {
+  if (datePreset.value === value) return
+  datePreset.value = value
+  loadSettlements()
+}
+
+function queryFilters(nextPage = 1) {
+  const range = activeRange.value
+  return {
+    keyword: keyword.value.trim(),
+    brand: brand.value || undefined,
+    startDate: range.startDate || undefined,
+    endDate: range.endDate || undefined,
+    sortBy: sortBy.value,
+    sortOrder: sortOrder.value,
+    page: nextPage,
+    pageSize: PAGE_SIZE,
+  }
+}
+
+// 请求序号守卫：搜索/排序/品牌/日期切换会重置列表，与在途的翻页请求并发时，
+// 只让最新一次请求的结果生效，避免旧筛选的下一页拼接进来。
+let requestSeq = 0
+
+async function loadSettlements({ silent = false } = {}) {
+  const seq = ++requestSeq
+  // 下拉刷新走静默模式：保留当前列表可见，不闪整屏 loading。
+  if (!silent) loading.value = true
   error.value = ''
 
   try {
-    const result = await fetchSettlements({
-      keyword: keyword.value.trim(),
-      brand: brand.value || undefined,
-      sortBy: sortBy.value,
-      sortOrder: sortOrder.value,
-      page: 1,
-      pageSize: PAGE_SIZE,
-    })
+    const result = await fetchSettlements(queryFilters(1))
+    if (seq !== requestSeq) return
     settlements.value = result.settlements ?? []
     pagination.value = result.pagination
     dateRange.value = result.dateRange
@@ -72,25 +130,32 @@ async function loadSettlements() {
       brandTotals.value = result.brandTotals
     }
   } catch (err) {
+    if (seq !== requestSeq) return
     error.value = err?.message || '结算单加载失败，请稍后重试'
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
+  }
+}
+
+// ── 下拉刷新 ──
+const refreshing = ref(false)
+async function onRefresh() {
+  try {
+    await loadSettlements({ silent: true })
+  } finally {
+    refreshing.value = false
   }
 }
 
 async function loadMore() {
   // 首屏仍在加载或已到末页时不再翻页。
   if (loading.value || finished.value) return
+  const seq = requestSeq
   try {
     const next = page.value + 1
-    const result = await fetchSettlements({
-      keyword: keyword.value.trim(),
-      brand: brand.value || undefined,
-      sortBy: sortBy.value,
-      sortOrder: sortOrder.value,
-      page: next,
-      pageSize: PAGE_SIZE,
-    })
+    const result = await fetchSettlements(queryFilters(next))
+    // 等待期间若发生搜索/筛选/刷新（序号变化），丢弃本页结果。
+    if (seq !== requestSeq) return
     settlements.value.push(...(result.settlements ?? []))
     pagination.value = result.pagination
     page.value = next
@@ -169,7 +234,7 @@ loadSettlements()
 
 <template>
   <div class="page settlement-page">
-    <van-nav-bar title="结算单" fixed placeholder safe-area-inset-top />
+    <van-nav-bar title="结算单列表" fixed placeholder safe-area-inset-top />
 
     <section class="control-bar">
       <div class="control-top">
@@ -186,6 +251,17 @@ loadSettlements()
           <span>{{ activeSortLabel }}</span>
           <span class="sort-arrow mono">▾</span>
         </button>
+      </div>
+
+      <div class="date-filter">
+        <button
+          v-for="preset in datePresets"
+          :key="preset.value"
+          class="brand-chip"
+          :class="{ active: datePreset === preset.value }"
+          type="button"
+          @click="selectDatePreset(preset.value)"
+        >{{ preset.label }}</button>
       </div>
 
       <div v-if="brandTotals.length" class="brand-filter">
@@ -235,18 +311,19 @@ loadSettlements()
       </div>
     </van-popup>
 
-    <p v-if="rangeText" class="range-hint mono">{{ rangeText }}</p>
+    <van-pull-refresh v-model="refreshing" class="list-pull" @refresh="onRefresh">
+      <p v-if="rangeText" class="range-hint mono">{{ rangeText }}</p>
 
-    <div v-if="loading" class="state-card">
-      <van-loading color="var(--accent)" size="22">加载结算单中...</van-loading>
-    </div>
+      <div v-if="loading" class="state-card">
+        <van-loading color="var(--accent)" size="22">加载结算单中...</van-loading>
+      </div>
 
-    <div v-else-if="error" class="state-card">
-      <p class="muted">{{ error }}</p>
-      <van-button type="primary" size="small" round @click="loadSettlements">重新加载</van-button>
-    </div>
+      <div v-else-if="error" class="state-card">
+        <p class="muted">{{ error }}</p>
+        <van-button type="primary" size="small" round @click="loadSettlements">重新加载</van-button>
+      </div>
 
-    <van-empty v-else-if="!settlements.length" image="search" description="暂无结算单" />
+      <van-empty v-else-if="!settlements.length" image="search" description="暂无结算单" />
 
     <van-list
       v-else
@@ -258,8 +335,8 @@ loadSettlements()
       @load="loadMore"
     >
       <article
-        v-for="item in settlements"
-        :key="item.merchantNo || item.orderNo"
+        v-for="(item, index) in settlements"
+        :key="item.merchantNo || item.orderNo || `idx-${index}`"
         class="settlement-item"
         @click="goDetail(item)"
       >
@@ -272,8 +349,14 @@ loadSettlements()
             <span class="order-no mono">{{ item.orderNoNormalized || item.orderNo || '—' }}<span v-if="item.recordCount" class="record-count"> · {{ item.recordCount }} 条</span></span>
           </div>
           <div class="amount-block">
-            <strong class="amount mono">{{ compactMoney(item.salesAmount) }}</strong>
-            <span class="amount-label mono">{{ money(item.salesAmount) }}</span>
+            <template v-if="item.payableAmount !== null">
+              <strong class="amount mono payable">{{ compactMoney(item.payableAmount) }}</strong>
+              <span class="amount-label mono">应付 · 销售 {{ compactMoney(item.salesAmount) }}</span>
+            </template>
+            <template v-else>
+              <strong class="amount mono">{{ compactMoney(item.salesAmount) }}</strong>
+              <span class="amount-label mono">{{ money(item.salesAmount) }}</span>
+            </template>
           </div>
         </div>
 
@@ -311,6 +394,7 @@ loadSettlements()
         </div>
       </article>
     </van-list>
+    </van-pull-refresh>
   </div>
 </template>
 
@@ -347,6 +431,16 @@ loadSettlements()
   scrollbar-width: none;
 }
 .brand-filter::-webkit-scrollbar { display: none; }
+.date-filter {
+  display: flex;
+  gap: 7px;
+  padding: 10px 0 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.date-filter::-webkit-scrollbar { display: none; }
+.list-pull { min-height: 60vh; }
+.amount.payable { color: var(--accent); }
 .brand-chip {
   display: inline-flex;
   align-items: center;

@@ -31,6 +31,17 @@ export async function logout() {
   }
 }
 
+export async function refreshCurrentUser() {
+  try {
+    const user = await fetchMe()
+    setCurrentUser(user)
+    return user
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) clearCurrentUser()
+    throw error
+  }
+}
+
 export function restoreSession() {
   if (authReady.value) return Promise.resolve(currentUser.value)
   if (restorePromise) return restorePromise

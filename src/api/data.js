@@ -23,6 +23,8 @@ function normalizeMetrics(row = {}) {
     weightedAvgPrice:
       nullableNum(row.weighted_avg_price ?? row.weightedAvgPrice)
       ?? (salesQuantity ? salesAmount / salesQuantity : null),
+    // 应付金额：货款扣完售后/费用/关税后的到手口径（后端就绪前为 null，前端不展示）。
+    payableAmount: nullableNum(row.payable_amount ?? row.payableAmount),
   }
 }
 
@@ -128,9 +130,17 @@ function normalizeSettlementItem(row = {}) {
     totalQuantity: salesQuantity,
     averagePrice:
       averagePrice ?? (salesQuantity ? salesAmount / salesQuantity : null),
+    // 应付金额（后端列表就绪前为 null，前端保留销售金额为主数字）。
+    payableAmount: nullableNum(row.payable_amount ?? row.payableAmount),
     confirmedAt: row.confirmed_at ?? row.confirmedAt ?? '',
     gradeQuantities: row.grade_quantities ?? row.gradeQuantities ?? {},
     recordCount: num(row.record_count ?? row.recordCount),
+    // settlement-comparison 候选项携带的同期排名（ADR：同期所有结算单中的名次）。
+    rank: row.rank && typeof row.rank === 'object' ? {
+      salesQuantity: row.rank.sales_quantity ?? null,
+      salesAmount: row.rank.sales_amount ?? null,
+      weightedAvgPrice: row.rank.weighted_avg_price ?? null,
+    } : null,
   }
 }
 
@@ -201,6 +211,57 @@ function normalizeSettlementDetail(body, merchantNo) {
       payableAmount: nullableNum(settlement.payable_amount ?? settlement.payableAmount),
     },
     records: Array.isArray(body.records ?? body.sale_records) ? (body.records ?? body.sale_records).map(normalizeRecord) : [],
+    // 号别阶梯：详情接口的 grade_details（后端 ADR-013 桶口径）。
+    gradeLadder: normalizeGradeLadder(body.grade_details ?? body.gradeDetails),
+  }
+}
+
+// 号别阶梯：后端 grade_details.buckets + insights（ADR-013 口径，数字全部后端算好）。
+function normalizeGradeLadder(detail) {
+  if (!detail || typeof detail !== 'object') return null
+  const buckets = (Array.isArray(detail.buckets) ? detail.buckets : [])
+    .map((row) => ({
+      label: row.label ?? '',
+      grade: String(row.grade ?? '').toUpperCase(),
+      fruitType: row.fruit_type ?? row.fruitType ?? '',
+      salesQuantity: num(row.sales_quantity ?? row.salesQuantity),
+      salesAmount: num(row.sales_amount ?? row.salesAmount),
+      weightedAvgPrice: nullableNum(row.weighted_avg_price ?? row.weightedAvgPrice),
+      quantityShare: nullableNum(row.quantity_share ?? row.quantityShare),
+      amountShare: nullableNum(row.amount_share ?? row.amountShare),
+      qualityMarks: Array.isArray(row.quality_marks) ? row.quality_marks : [],
+    }))
+    .sort((a, b) => (b.weightedAvgPrice ?? -Infinity) - (a.weightedAvgPrice ?? -Infinity))
+  const insights = detail.insights ?? {}
+  const crossGaps = (Array.isArray(insights['同号别跨结算单价格差']) ? insights['同号别跨结算单价格差'] : [])
+    .map((row) => ({
+      label: row['号别'] ?? '',
+      topMerchant: row['最高价商号'] ?? '',
+      topPrice: nullableNum(row['最高每件均价']),
+      topQuantity: num(row['最高价件数']),
+      bottomMerchant: row['最低价商号'] ?? '',
+      bottomPrice: nullableNum(row['最低每件均价']),
+      bottomQuantity: num(row['最低价件数']),
+      diff: nullableNum(row['相差']),
+    }))
+    .filter((row) => row.label && row.diff !== null)
+    .sort((a, b) => b.diff - a.diff)
+  const gradeGaps = (Array.isArray(insights['同级号别价格差']) ? insights['同级号别价格差'] : [])
+    .map((row) => ({
+      grade: String(row['大等级'] ?? '').toUpperCase(),
+      topLabel: row['最贵号别'] ?? '',
+      topPrice: nullableNum(row['最贵每件均价']),
+      bottomLabel: row['最便宜号别'] ?? '',
+      bottomPrice: nullableNum(row['最便宜每件均价']),
+      diff: nullableNum(row['相差']),
+    }))
+    .filter((row) => row.grade && row.diff !== null)
+  const unrecognized = detail.unrecognized ?? {}
+  return {
+    buckets,
+    crossGaps,
+    gradeGaps,
+    unrecognizedQuantity: num(unrecognized.sales_quantity),
   }
 }
 
@@ -227,6 +288,7 @@ function normalizeSeriesComparison(body) {
     series: Array.isArray(body.series) ? body.series : [],
     total: normalizeMetrics(body.total?.total ?? body.total ?? {}),
     gradeDetails,
+    gradeLadder: normalizeGradeLadder(body.grade_details ?? body.gradeDetails),
   }
 }
 
@@ -296,6 +358,13 @@ export async function fetchGradeBreakdown(filters = {}) {
       brand: row.brand ?? '',
       containerCount: num(row.container_count ?? row.containerCount),
     })),
+    // 市场维度金额（后端 market_sales）：回答「下一柜发哪个市场」。
+    marketSales: (Array.isArray(body.market_sales) ? body.market_sales : []).map((row) => ({
+      market: row.market ?? '未标注市场',
+      salesQuantity: num(row.sales_quantity),
+      salesAmount: num(row.sales_amount),
+      weightedAvgPrice: nullableNum(row.weighted_avg_price),
+    })),
   }
 }
 
@@ -350,6 +419,32 @@ export async function fetchSettlements(filters = {}) {
 export async function fetchSettlementDetail(merchantNo, filters = {}) {
   const body = await api.settlementDetail(merchantNo, filters)
   return normalizeSettlementDetail(body, merchantNo)
+}
+
+// 结算单复核视图（后端二次确认页同款只读数据）：逐条售后与费用明细。
+function normalizeReviewPayload(body) {
+  const payload = body?.payload ?? {}
+  const toNum = (value) => {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : 0
+  }
+  return {
+    afterSales: (Array.isArray(payload.after_sales) ? payload.after_sales : []).map((row) => ({
+      content: row.content ?? '',
+      summary: row.summary ?? '',
+      amount: toNum(row.amount),
+    })),
+    fees: (Array.isArray(payload.fees) ? payload.fees : []).map((row) => ({
+      name: row.name ?? '',
+      amount: toNum(row.amount),
+      isCustom: Boolean(row.is_custom),
+    })),
+  }
+}
+
+export async function fetchSettlementReview(merchantNo) {
+  const body = await api.settlementReview(merchantNo)
+  return normalizeReviewPayload(body)
 }
 
 export async function fetchSeriesComparison(merchantNos, filters = {}) {

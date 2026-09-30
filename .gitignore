@@ -17,3 +17,6 @@ logs/
 src/.mimosa/
 .zcode/
 backup_ui_report_style/
+
+# 离线部署本地产物：镜像 tar 由 build-images.sh 重新生成
+images/*.tar

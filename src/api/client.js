@@ -196,6 +196,8 @@ export const api = {
         sort_order: filters.sortOrder,
       },
     }),
+  settlementReview: (merchantNo) =>
+    request(`/settlements/${encodeURIComponent(merchantNo)}/review`),
   seriesComparison: (merchantNos, filters = {}) =>
     request('/analytics/series-comparison', {
       query: {
